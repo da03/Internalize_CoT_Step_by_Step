@@ -11,15 +11,15 @@ This repository contains code to reproduce the results from our paper "From Expl
 
 All dataset files and log files during inference are included in this repository, with the exception of large training files maintained under Git LFS. Model checkpoints are stored on Google Drive. The folder containing all checkpoints can be found at [this link](https://drive.google.com/drive/folders/1_riWn76CiUWcc-fB6KL__PSBF5zstF1T?usp=sharing).
 
-* 4 X 4 Mult - GPT-2: [data](data/4_by_4_mult/) [model](https://drive.google.com/drive/folders/1cCqJmmwJA7wg0Q64f51WgASSnLVJ4ahO?usp=sharing) [log](logs/4_by_4_mult/gpt2/log.generate)
-* 5 X 5 Mult - GPT-2: [data](data/5_by_5_mult/) [model](https://drive.google.com/drive/folders/1r80h5rLgAa1NpAzIknuvHB92nDT2j0Hz?usp=sharing) [log](logs/5_by_5_mult/gpt2/log.generate)
-* 7 X 7 Mult - GPT-2: [data](data/7_by_7_mult/) [model](https://drive.google.com/drive/folders/1a8jbCV9d9o243qqsxKvgnwDVT27PfJry?usp=sharing) [log](logs/7_by_7_mult/gpt2/log.generate)
-* 9 X 9 Mult - GPT-2: [data](data/9_by_9_mult/) [model](https://drive.google.com/drive/folders/1WQn00xYt_fuFaw-hsl9u-QavmBn8NUaD?usp=sharing) [log](logs/9_by_9_mult/gpt2/log.generate)
-* 11 X 11 Mult - GPT-2: [data](data/11_by_11_mult/) [model](https://drive.google.com/drive/folders/1JuHal52yxN0oO0Q_FMhjp6Enr54wAVy6?usp=sharing) (partially internalized) [log](logs/11_by_11_mult_320_tokens_removed/gpt2/log.generate)
-* GSM8K - GPT-2: [data](data/gsm8k/) [model](https://drive.google.com/drive/folders/1IUQ26DNqDrX0mfTSm19gqG5k1FxLZsr2?usp=sharing) [log](logs/gsm8k/gpt2/log.generate)
-* GSM8K - GPT-2 Medium: [data](data/gsm8k/) [model](https://drive.google.com/drive/folders/1-mJ8h9O8ztx0iWJxtgcP4LEJlxj6Cyln?usp=sharing) [log](logs/gsm8k/gpt2-medium/log.generate)
-* GSM8K - Phi-3 3.8B: [data](data/gsm8k/) [model](https://drive.google.com/drive/folders/1Jm1sk62WhDX2exiQmRKI53aW5jKXAZE9?usp=sharing) [log](logs/gsm8k/phi3-3.8B/log.generate)
-* GSM8K - Mistral 7B: [data](data/gsm8k/) [model](https://drive.google.com/drive/folders/1azfzWxf2jy1H7XAe-dAhtYFTPuh7tfmd?usp=sharing) [log](logs/gsm8k/mistral-7B/log.generate)
+* 4 X 4 Mult - GPT-2 (Acc: 1.00): [data](data/4_by_4_mult/) [model](https://drive.google.com/drive/folders/1cCqJmmwJA7wg0Q64f51WgASSnLVJ4ahO?usp=sharing) [log](logs/4_by_4_mult/gpt2/log.generate)
+* 5 X 5 Mult - GPT-2 (Acc: 1.00): [data](data/5_by_5_mult/) [model](https://drive.google.com/drive/folders/1r80h5rLgAa1NpAzIknuvHB92nDT2j0Hz?usp=sharing) [log](logs/5_by_5_mult/gpt2/log.generate)
+* 7 X 7 Mult - GPT-2 (Acc: 0.95): [data](data/7_by_7_mult/) [model](https://drive.google.com/drive/folders/1a8jbCV9d9o243qqsxKvgnwDVT27PfJry?usp=sharing) [log](logs/7_by_7_mult/gpt2/log.generate)
+* 9 X 9 Mult - GPT-2 (Acc: 0.99): [data](data/9_by_9_mult/) [model](https://drive.google.com/drive/folders/1WQn00xYt_fuFaw-hsl9u-QavmBn8NUaD?usp=sharing) [log](logs/9_by_9_mult/gpt2/log.generate)
+* 11 X 11 Mult - GPT-2 (Acc: 0.74): [data](data/11_by_11_mult/) [model](https://drive.google.com/drive/folders/1JuHal52yxN0oO0Q_FMhjp6Enr54wAVy6?usp=sharing) (partially internalized) [log](logs/11_by_11_mult_320_tokens_removed/gpt2/log.generate)
+* GSM8K - GPT-2 (Acc: 0.30): [data](data/gsm8k/) [model](https://drive.google.com/drive/folders/1IUQ26DNqDrX0mfTSm19gqG5k1FxLZsr2?usp=sharing) [log](logs/gsm8k/gpt2/log.generate)
+* GSM8K - GPT-2 Medium (Acc: 0.35): [data](data/gsm8k/) [model](https://drive.google.com/drive/folders/1-mJ8h9O8ztx0iWJxtgcP4LEJlxj6Cyln?usp=sharing) [log](logs/gsm8k/gpt2-medium/log.generate)
+* GSM8K - Phi-3 3.8B (Acc: 0.31): [data](data/gsm8k/) [model](https://drive.google.com/drive/folders/1Jm1sk62WhDX2exiQmRKI53aW5jKXAZE9?usp=sharing) [log](logs/gsm8k/phi3-3.8B/log.generate)
+* GSM8K - Mistral 7B (Acc: 0.51): [data](data/gsm8k/) [model](https://drive.google.com/drive/folders/1azfzWxf2jy1H7XAe-dAhtYFTPuh7tfmd?usp=sharing) [log](logs/gsm8k/mistral-7B/log.generate)
 
 ## Additional Datasets
 
