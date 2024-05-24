@@ -23,7 +23,7 @@ All dataset files and log files during inference are included in this repository
 
 ## Additional Datasets
 
-We have included more multiplication datasets than those used in the paper to encourage future research that might yield even better results.
+We have included more multiplication datasets than those used in the paper to encourage future research that might yield even better results. The folder containing all datasets can be found at [this link](https://drive.google.com/drive/folders/1dbQYoZNhu4h7aQzp6b6s3CUOd2pMX0sB?usp=sharing).
 
 * 6 X 6 Mult: [data](https://drive.google.com/drive/folders/1FkGl3r4nxJZfbmh_cfNIrdC6GVFqeE_N?usp=sharing)
 * 8 X 8 Mult: [data](https://drive.google.com/drive/folders/1F_k292AiCTSSHyLSejQYhApdnQzs57F7?usp=sharing)
