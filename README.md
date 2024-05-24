@@ -89,15 +89,15 @@ TOKENIZERS_PARALLELISM=false CUDA_VISIBLE_DEVICES=0 stdbuf -oL -eL python src/tr
     --train_path ${FOLDER}/train.txt \
     --val_path ${FOLDER}/valid.txt \
     --epochs $EPOCHS \
-    --delete_per_epoch $DELETE_PER_EPOCH \
+    --remove_per_epoch $DELETE_PER_EPOCH \
     --pretrain_epoch $PRETRAIN_EPOCHS \
     --lr $LR \
     --batch_size $BSZ \
     --base_model $MODEL \
-    --delete_side $DELETE_SIDE \
-    --delete_all_beyond $DELETE_ALL_BEYOND \
-    --delete_schedule_type $DELETE_SCHEDULE_TYPE \
-    --deletion_smoothing_lambda $DELETION_SMOOTHING_LAMBDA \
+    --removal_side $DELETE_SIDE \
+    --remove_all_beyond $DELETE_ALL_BEYOND \
+    --remove_schedule_type $DELETE_SCHEDULE_TYPE \
+    --removal_smoothing_lambda $DELETION_SMOOTHING_LAMBDA \
     --reset_optimizer \
     --seed $S \
     --save_model $SAVE \
@@ -118,10 +118,10 @@ export SIDE=left
 export SAVE=generation_logs/${D}_by_${D}_mult/gpt2
 mkdir -p $SAVE
 TOKENIZERS_PARALLELISM=false CUDA_VISIBLE_DEVICES=0 stdbuf -oL -eL python src/generate.py \
-    --start_from ${START_FROM}
-    --delete_side $SIDE \
     --from_pretrained ${MODEL} \
+    --start_from ${START_FROM} \
     --test_path ${FOLDER}/test_bigbench.txt \
+    --removal_side ${SIDE} \
     --batch_size $BSZ \
     > ${SAVE}/log.generate 2>&1&
 ```
