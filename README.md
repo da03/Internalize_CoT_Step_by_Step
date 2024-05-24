@@ -9,7 +9,7 @@ This repository contains code to reproduce the results from our paper "From Expl
 
 ## Data & Pretrained Models & Logs
 
-All dataset files and log files during inference are included in this repository, with the exception of large training files maintained under Git LFS. Model checkpoints are stored on Google Drive. The folder containing all checkpoints can be found at [this link](https://drive.google.com/drive/folders/1_riWn76CiUWcc-fB6KL__PSBF5zstF1T?usp=sharing).
+All dataset files and log files during inference are included in this repository, with the exception of large training files maintained under Git LFS. Model checkpoints are stored on Google Drive. The folder containing all model checkpoints and datasets can be found at [this link](https://drive.google.com/drive/folders/1_riWn76CiUWcc-fB6KL__PSBF5zstF1T?usp=sharing).
 
 * 4 X 4 Mult - GPT-2 (Acc: 1.00): [data](data/4_by_4_mult/) [model](https://drive.google.com/drive/folders/1cCqJmmwJA7wg0Q64f51WgASSnLVJ4ahO?usp=sharing) [log](logs/4_by_4_mult/gpt2/log.generate)
 * 5 X 5 Mult - GPT-2 (Acc: 1.00): [data](data/5_by_5_mult/) [model](https://drive.google.com/drive/folders/1r80h5rLgAa1NpAzIknuvHB92nDT2j0Hz?usp=sharing) [log](logs/5_by_5_mult/gpt2/log.generate)

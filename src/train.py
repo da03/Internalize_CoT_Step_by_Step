@@ -57,7 +57,7 @@ def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens, schedule
 
         if scheduled_to_remove > 0 or removal_smoothing_lambda != float('inf'):
             if keep_position:
-                position_ids_all = torch.arange(0, input_ids_all.shape[-1], dtype=torch.long, device=input_ids.device).unsqueeze(0).repeat(batch_size, 1)
+                position_ids_all = torch.arange(0, input_ids_all.shape[-1], dtype=torch.long, device=device).unsqueeze(0).repeat(batch_size, 1)
             input_ids_all_tmp = []
             labels_tmp = []
             random_removal_offset = torch.multinomial(lambda_distribution, batch_size, replacement=True).to(device)
@@ -80,8 +80,8 @@ def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens, schedule
                     position_ids_all[batch_id, removal_from_position-1:] += removal_to_position-removal_from_position
                 input_ids_all_tmp.append(torch.cat((input_ids_all[batch_id, :removal_from_position], input_ids_all[batch_id, removal_to_position:]), dim=-1))
                 labels_tmp.append(torch.cat((labels[batch_id, :removal_from_position], labels[batch_id, removal_to_position:]), dim=-1))
-            input_ids_all = batch_ids(input_ids_all_tmp, tokenizer.eos_token_id, input_ids_all.device, input_ids_all.dtype)
-            labels = batch_ids(labels_tmp, tokenizer.eos_token_id, input_ids.device, input_ids.dtype)
+            input_ids_all = batch_ids(input_ids_all_tmp, tokenizer.eos_token_id, device, input_ids_all.dtype)
+            labels = batch_ids(labels_tmp, tokenizer.eos_token_id, device, input_ids.dtype)
 
         with ctx:
             if keep_position:
@@ -191,7 +191,7 @@ def main():
         model.model.apply(model.model._init_weights)
 
     if args.keep_position:
-        assert 'gpt2' in args.model # only implemented for gpt2 generate
+        assert 'gpt2' in args.model # only implemented for gpt2 generate TODO: the code for this is not checked in yet
 
     # Load data
     collate_fn = CoTDataCollator(tokenizer)
@@ -258,8 +258,8 @@ def main():
             if scheduled_to_remove > 0 or args.removal_smoothing_lambda != float('inf'):
                 input_ids_tmp = []
                 labels_tmp = []
-                random_removal_offset = torch.multinomial(lambda_distribution, batch_size, replacement=True)
-                to_remove = scheduled_to_remove + random_removal_offset.to(input_ids.device)
+                random_removal_offset = torch.multinomial(lambda_distribution, batch_size, replacement=True).to(device)
+                to_remove = scheduled_to_remove + random_removal_offset
                 if epoch < args.pretrain_epoch:
                     to_remove.fill_(args.remove_start_from)
                 if args.keep_position:
@@ -283,8 +283,8 @@ def main():
                         position_ids[batch_id, removal_from_position-1:] += removal_to_position-removal_from_position
                     input_ids_tmp.append(torch.cat((input_ids[batch_id, :removal_from_position], input_ids[batch_id, removal_to_position:]), dim=-1))
                     labels_tmp.append(torch.cat((labels[batch_id, :removal_from_position], labels[batch_id, removal_to_position:]), dim=-1))
-                input_ids = batch_ids(input_ids_tmp, tokenizer.eos_token_id, input_ids.device, input_ids.dtype)
-                labels = batch_ids(labels_tmp, tokenizer.eos_token_id, input_ids.device, input_ids.dtype)
+                input_ids = batch_ids(input_ids_tmp, tokenizer.eos_token_id, device, input_ids.dtype)
+                labels = batch_ids(labels_tmp, tokenizer.eos_token_id, device, input_ids.dtype)
                 if not all_cot_removed_in_batch:
                     best_val_accuracy = float('-inf')
             print (input_ids.shape)
