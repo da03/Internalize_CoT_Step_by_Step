@@ -21,7 +21,7 @@ logging.disable(logging.WARNING)
 
 
 @torch.no_grad()
-def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens, remove_eos):
+def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens):
     model.eval()
     total_instances = 0
     total_correct = 0
@@ -36,10 +36,7 @@ def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens, remove_e
         total_instances += batch_size
 
         # Generate
-        if remove_eos:
-            stop_on_two_eos = False
-        else:
-            stop_on_two_eos = True
+        stop_on_two_eos = True
         start_time = time.time()
         beam_output = model.generate(
             input_ids=input_ids,
@@ -74,8 +71,6 @@ def main():
     parser.add_argument('--max_new_tokens', type=int, default=800)
     parser.add_argument('--batch_size', type=int, default=1)
     parser.add_argument('--truncation', type=int, default=-1)
-    parser.add_argument('--remove_eos', action='store_true')
-    parser.set_defaults(remove_eos=False)
     parser.add_argument('--bf16', action='store_true')
     parser.set_defaults(bf16=False)
     args = parser.parse_args()
@@ -103,7 +98,7 @@ def main():
     test_dataset = CoTDataset(tokenizer, args.test_path, args.truncation)
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, collate_fn=collate_fn, shuffle=False)
 
-    accuracy, throughput = evaluate(test_dataloader, tokenizer, device, ctx, model, args.max_new_tokens, args.remove_eos)
+    accuracy, throughput = evaluate(test_dataloader, tokenizer, device, ctx, model, args.max_new_tokens)
     print (f"Test Accuracy: {accuracy}. Throughput: {throughput}")
 
 if __name__ == "__main__":

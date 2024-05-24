@@ -1,6 +1,24 @@
 import torch
 from transformers import StoppingCriteria, LogitsProcessor
 
+
+def save_model(model, tokenizer, model_dir):
+    print ('saving', model_dir)
+    os.makedirs(model_dir, exist_ok=True)
+    model.save_pretrained(model_dir)
+    tokenizer.save_pretrained(model_dir)
+
+
+def batch_ids(input_ids_list, pad_token_id, device, dtype):
+    max_seq_len = max([len(item) for item in input_ids_list])
+    batch_size = len(input_ids_list)
+    input_ids = torch.Tensor(batch_size, max_seq_len).to(dtype).to(device)
+    input_ids.fill_(pad_token_id)
+    for batch_id in range(batch_size):
+        input_ids[batch_id, :len(input_ids_list[batch_id])] = input_ids_list[batch_id]
+    return input_ids
+
+
 def get_sep_position(input_ids, sep_id, skip=0):
     batch_size = input_ids.shape[0]
     sep_positions = input_ids.new_zeros(batch_size).long()

@@ -11,11 +11,11 @@ from utils import get_sep_position, DoubleEOSStoppingCriteria, DoubleEOSLogitsPr
 
 
 class ImplicitModel(nn.Module):
-    def __init__(self, config, reinitialize=False):
+    def __init__(self, config, reinitialize_weights=False):
         super().__init__()
         self.config = config
         self.base_model = AutoModelForCausalLM.from_pretrained(config.base_model, trust_remote_code=True)
-        if reinitialize:
+        if reinitialize_weights:
             print ('Reinitializing model weights!')
             self.base_model.apply(self.base_model._init_weights)
         self.tokenizer = AutoTokenizer.from_pretrained(config.tokenizer_name)

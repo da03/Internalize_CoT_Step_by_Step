@@ -76,31 +76,31 @@ export MODEL=gpt2
 export EPOCHS=200
 export LR=5e-5
 export BSZ=32
-export DELETE_SIDE=left
-export DELETE_PER_EPOCH=8
-export DELETE_ALL_BEYOND=inf
-export DELETE_SCHEDULE_TYPE=step
-export DELETION_SMOOTHING_LAMBDA=4
-export PRETRAIN_EPOCHS=1
-export SEED=1234
+export ACCUMULATE=1
+export REMOVE_PER_EPOCH=8
+export REMOVE_ALL_WHEN_REMOVE_BEYOND=inf
+export REMOVAL_SMOOTHING_LAMBDA=4
+export REMOVAL_SIDE=left
+export PRETRAIN_EPOCHS=0
+export SEED=3456
 export SAVE=train_models/${D}_by_${D}_mult/gpt2
 mkdir -p $SAVE
 TOKENIZERS_PARALLELISM=false CUDA_VISIBLE_DEVICES=0 stdbuf -oL -eL python src/train.py \
+    --model ${MODEL} \
     --train_path ${FOLDER}/train.txt \
     --val_path ${FOLDER}/valid.txt \
-    --epochs $EPOCHS \
-    --remove_per_epoch $DELETE_PER_EPOCH \
-    --pretrain_epoch $PRETRAIN_EPOCHS \
-    --lr $LR \
-    --batch_size $BSZ \
-    --base_model $MODEL \
-    --removal_side $DELETE_SIDE \
-    --remove_all_beyond $DELETE_ALL_BEYOND \
-    --remove_schedule_type $DELETE_SCHEDULE_TYPE \
-    --removal_smoothing_lambda $DELETION_SMOOTHING_LAMBDA \
+    --epochs ${EPOCHS} \
+    --lr ${LR} \
+    --batch_size ${BSZ} \
+    --accumulate ${ACCUMULATE} \
+    --remove_per_epoch ${REMOVE_PER_EPOCH} \
+    --remove_all_when_remove_beyond ${REMOVE_ALL_WHEN_REMOVE_BEYOND} \
+    --removal_smoothing_lambda ${REMOVAL_SMOOTHING_LAMBDA} \
+    --removal_side ${REMOVAL_SIDE} \
+    --pretrain_epoch ${PRETRAIN_EPOCHS} \
+    --seed ${SEED} \
     --reset_optimizer \
-    --seed $S \
-    --save_model $SAVE \
+    --save_model ${SAVE} \
     > ${SAVE}/log.train 2>&1
 ```
 
@@ -118,6 +118,6 @@ mkdir -p $SAVE
 TOKENIZERS_PARALLELISM=false CUDA_VISIBLE_DEVICES=0 stdbuf -oL -eL python src/generate.py \
     --from_pretrained ${MODEL} \
     --test_path ${FOLDER}/test_bigbench.txt \
-    --batch_size $BSZ \
+    --batch_size ${BSZ} \
     > ${SAVE}/log.generate 2>&1&
 ```
