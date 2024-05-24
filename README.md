@@ -67,10 +67,10 @@ Note that the chain-of-thought steps are only used for training, not for generat
 
 ![](imgs/stepwise_internalization.png)
 
-To train the model, run the following commands. The example uses 7 X 7 Mult with GPT-2:
+To train the model, run the following commands. The example uses 9 X 9 Mult with GPT-2:
 
 ```
-export D=7
+export D=9
 export FOLDER=data/${D}_by_${D}_mult/
 export MODEL=gpt2
 export EPOCHS=200
@@ -97,7 +97,7 @@ TOKENIZERS_PARALLELISM=false CUDA_VISIBLE_DEVICES=0 stdbuf -oL -eL python src/tr
     --remove_all_when_remove_beyond ${REMOVE_ALL_WHEN_REMOVE_BEYOND} \
     --removal_smoothing_lambda ${REMOVAL_SMOOTHING_LAMBDA} \
     --removal_side ${REMOVAL_SIDE} \
-    --pretrain_epoch ${PRETRAIN_EPOCHS} \
+    --pretrain_epochs ${PRETRAIN_EPOCHS} \
     --seed ${SEED} \
     --reset_optimizer \
     --save_model ${SAVE} \
@@ -106,10 +106,10 @@ TOKENIZERS_PARALLELISM=false CUDA_VISIBLE_DEVICES=0 stdbuf -oL -eL python src/tr
 
 ### Generation & Evaluation
 
-Here we use a pretrained model as an example. Download the folder `models/7_by_7_mult/gpt2`, then the following command will run inference and evaluate both accuracy and throughput, logged in file `generation_logs/7_by_7_mult/log.generate`.
+Here we use a pretrained model as an example. Download the folder `models/9_by_9_mult/gpt2`, then the following command will run inference and evaluate both accuracy and throughput, logged in file `generation_logs/9_by_9_mult/log.generate`.
 
 ```
-export D=7
+export D=9
 export FOLDER=data/${D}_by_${D}_mult/
 export MODEL=models/${D}_by_${D}_mult/gpt2
 export BSZ=1

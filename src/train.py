@@ -139,14 +139,14 @@ def main():
     parser.add_argument('--remove_all_when_remove_beyond', type=str, default='inf')
     parser.add_argument('--removal_smoothing_lambda', type=float, default=float('inf'))
     parser.add_argument('--removal_side', type=str, choices=['left', 'right'], default='left')
-    parser.add_argument('--pretrain_epoch', type=int, default=0)
+    parser.add_argument('--pretrain_epochs', type=int, default=0)
     parser.add_argument('--truncation', type=int, default=-1)
     parser.add_argument('--max_len_train', type=int, default=-1)
     parser.add_argument('--max_new_tokens', type=int, default=800)
     parser.add_argument('--save_model', type=str, required=True)
     parser.add_argument('--from_pretrained', type=str, default=None)
     parser.add_argument('--remove_start_from', type=int, default=0)
-    parser.add_argument('--seed', type=int, default=3456)
+    parser.add_argument('--seed', type=int, default=1234)
     parser.add_argument('--max_grad_norm', type=float, default=1.0)
     parser.add_argument('--bf16', action='store_true')
     parser.set_defaults(bf16=False)
@@ -236,7 +236,7 @@ def main():
             if remove_step_counter == steps_per_removed_token or steps_per_removed_token == 0:
                 scheduled_to_remove += 1
                 remove_step_counter = 0
-            if epoch >= args.pretrain_epoch:
+            if epoch >= args.pretrain_epochs:
                 remove_step_counter += 1
             if scheduled_to_remove > prev_scheduled_to_remove:
                 print(f" -epoch {epoch}. step {step}. removing: {scheduled_to_remove}")
@@ -260,7 +260,7 @@ def main():
                 labels_tmp = []
                 random_removal_offset = torch.multinomial(lambda_distribution, batch_size, replacement=True).to(device)
                 to_remove = scheduled_to_remove + random_removal_offset
-                if epoch < args.pretrain_epoch:
+                if epoch < args.pretrain_epochs:
                     to_remove.fill_(args.remove_start_from)
                 if args.keep_position:
                     position_ids = torch.arange(0, input_ids.shape[-1], dtype=torch.long, device=device).unsqueeze(0).repeat(batch_size, 1)
