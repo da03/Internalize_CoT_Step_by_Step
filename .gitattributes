@@ -1,0 +1,6 @@
+data/7_by_7_mult/train.txt filter=lfs diff=lfs merge=lfs -text
+data/4_by_4_mult/train.txt filter=lfs diff=lfs merge=lfs -text
+data/5_by_5_mult/train.txt filter=lfs diff=lfs merge=lfs -text
+data/9_by_9_mult/train.txt filter=lfs diff=lfs merge=lfs -text
+data/11_by_11_mult/train.txt filter=lfs diff=lfs merge=lfs -text
+data/gsm8k/train.txt filter=lfs diff=lfs merge=lfs -text
