@@ -15,7 +15,7 @@ All dataset files and log files during inference are included in this repository
 * 5 X 5 Mult - GPT-2: [data](data/5_by_5_mult/) [model]() [log](logs/5_by_5_mult/gpt2/log.generate)
 * 7 X 7 Mult - GPT-2: [data](data/7_by_7_mult/) [model]() [log](logs/7_by_7_mult/gpt2/log.generate)
 * 9 X 9 Mult - GPT-2: [data](data/9_by_9_mult/) [model]() [log](logs/9_by_9_mult/gpt2/log.generate)
-* 11 X 11 Mult - GPT-2: [data](data/11_by_11_mult/) [model]() (partially internalized) [log](logs/11_by_11_mult/gpt2/log.generate)
+* 11 X 11 Mult - GPT-2: [data](data/11_by_11_mult/) [model]() (partially internalized) [log](logs/11_by_11_mult_320_tokens_removed/gpt2/log.generate)
 * GSM8K - GPT-2: [data](data/gsm8k/) [model]() [log](logs/gsm8k/gpt2/log.generate)
 * GSM8K - GPT-2 Medium: [data](data/gsm8k/) [model]() [log](logs/gsm8k/gpt2-medium/log.generate)
 * GSM8K - Phi-3 3.8B: [data](data/gsm8k/) [model]() [log](logs/gsm8k/phi3-3.8B/log.generate)
@@ -25,18 +25,18 @@ All dataset files and log files during inference are included in this repository
 
 We have included more multiplication datasets than those used in the paper to encourage future research that might yield even better results.
 
-* 6 X 6 Mult: [data](data/6_by_6_mult/)
-* 8 X 8 Mult: [data](data/8_by_8_mult/)
-* 10 X 10 Mult: [data](data/10_by_10_mult/)
-* 12 X 12 Mult: [data](data/12_by_12_mult/)
-* 13 X 12 Mult: [data](data/13_by_13_mult/)
-* 14 X 12 Mult: [data](data/14_by_14_mult/)
-* 15 X 12 Mult: [data](data/15_by_15_mult/)
-* 16 X 12 Mult: [data](data/16_by_16_mult/)
-* 17 X 12 Mult: [data](data/17_by_17_mult/)
-* 18 X 12 Mult: [data](data/18_by_18_mult/)
-* 19 X 12 Mult: [data](data/19_by_19_mult/)
-* 20 X 12 Mult: [data](data/20_by_20_mult/)
+* 6 X 6 Mult: [data]()
+* 8 X 8 Mult: [data]()
+* 10 X 10 Mult: [data]()
+* 12 X 12 Mult: [data]()
+* 13 X 12 Mult: [data]()
+* 14 X 12 Mult: [data]()
+* 15 X 12 Mult: [data]()
+* 16 X 12 Mult: [data]()
+* 17 X 12 Mult: [data]()
+* 18 X 12 Mult: [data]()
+* 19 X 12 Mult: [data]()
+* 20 X 12 Mult: [data]()
 
 ## Usage
 
@@ -110,18 +110,14 @@ Here we use a pretrained model as an example. Download the folder `models/7_by_7
 
 ```
 export D=7
-export START_FROM=inf
 export FOLDER=data/${D}_by_${D}_mult/
 export MODEL=models/${D}_by_${D}_mult/gpt2
 export BSZ=1
-export SIDE=left
 export SAVE=generation_logs/${D}_by_${D}_mult/gpt2
 mkdir -p $SAVE
 TOKENIZERS_PARALLELISM=false CUDA_VISIBLE_DEVICES=0 stdbuf -oL -eL python src/generate.py \
     --from_pretrained ${MODEL} \
-    --start_from ${START_FROM} \
     --test_path ${FOLDER}/test_bigbench.txt \
-    --removal_side ${SIDE} \
     --batch_size $BSZ \
     > ${SAVE}/log.generate 2>&1&
 ```
