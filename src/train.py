@@ -270,6 +270,7 @@ def main():
                 else: # removal_side == 'right'
                     removal_to_positions = second_sep_positions
                     removal_from_positions = second_sep_positions - to_remove
+
                 all_cot_removed_in_batch = True
                 for batch_id in range(input_ids.shape[0]):
                     removal_from_position = removal_from_positions[batch_id]
@@ -297,8 +298,6 @@ def main():
                     position_ids = position_ids[:, :input_ids.shape[-1]]
                 outputs = model.compute_loss(input_ids=input_ids, labels=labels, position_ids=position_ids)
             loss = outputs.loss
-            token_accuracy = outputs.token_accuracy.item()
-
             loss.div(args.accumulate).backward()
             if step % args.accumulate == 0:
                 torch.nn.utils.clip_grad_norm_(trainable_params, args.max_grad_norm)
@@ -306,6 +305,7 @@ def main():
                 optimizer.zero_grad(set_to_none=True)
 
             if step % 100 == 0:
+                token_accuracy = outputs.token_accuracy.item()
                 ppl = loss.exp().item()
                 print (f"Step: {step}. PPL: {ppl}. Token Accuracy: {token_accuracy}")
             step += 1
