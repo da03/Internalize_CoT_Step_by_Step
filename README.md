@@ -40,7 +40,7 @@ We have included more multiplication datasets than those used in the paper to en
 
 ## Usage
 
-We use 7 X 7 Mult with GPT-2 as an example. We assume that the working directory is `Internalize_CoT_Step_by_Step` throughout this document.
+We use 9 X 9 Mult with GPT-2 as an example. We assume that the working directory is `Internalize_CoT_Step_by_Step` throughout this document.
 
 ### Data Format
 
