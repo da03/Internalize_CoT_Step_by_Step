@@ -13,7 +13,7 @@ conda activate /n/shieber_lab/Lab/yuntian/icml/conda_icml
 which python
 
 export NUM_DIGITS_MIN=1
-export NUM_DIGITS_MAX=9
+export NUM_DIGITS_MAX=15
 export FOLDER=/n/rush_lab/Lab/Users/yuntian/implicit/data/long_mult_mixed_${NUM_DIGITS_MIN}_to_${NUM_DIGITS_MAX}_inter_mar1824_includingzero_padinput
 export MODEL=gpt2
 export EPOCHS=200
@@ -26,10 +26,10 @@ export REMOVAL_SMOOTHING_LAMBDA=4
 export REMOVAL_SIDE=left
 export PRETRAIN_EPOCHS=0
 export SEED=3456
-export MAX_VAL_SIZE=32
-export SAVE=train_models/mix_${NUM_DIGITS_MIN}_to_${NUM_DIGITS_MAX}_includingzero_padinput_d${REMOVE_PER_EPOCH}/gpt2
+export MAX_VAL_SIZE=16
+export SAVE=train_models/mix_${NUM_DIGITS_MIN}_to_${NUM_DIGITS_MAX}_includingzero_padinput_d${REMOVE_PER_EPOCH}_nosharp_deleteeos_eqn_val16/gpt2
 mkdir -p $SAVE
-TOKENIZERS_PARALLELISM=false CUDA_VISIBLE_DEVICES=0 stdbuf -oL -eL python src/train_mix.py \
+TOKENIZERS_PARALLELISM=false CUDA_VISIBLE_DEVICES=0 stdbuf -oL -eL python src/train_mix_nosharp_deleteeos_eqn.py \
     --model ${MODEL} \
     --data_folder ${FOLDER} \
     --epochs ${EPOCHS} \

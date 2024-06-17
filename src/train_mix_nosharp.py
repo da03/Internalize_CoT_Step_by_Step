@@ -14,7 +14,7 @@ from transformers import AdamW
 
 from model import ImplicitModel
 from configuration_model import ImplicitModelConfig
-from data import CoTDataset, CoTDataCollator, extract_answer
+from nosharpdata import CoTDataset, CoTDataCollator, extract_answer
 from utils import get_sep_position, batch_ids, save_model
 
 
@@ -110,9 +110,14 @@ def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens, schedule
             sep_position = sep_positions[i].item()
             tgt = input_ids_all_i[sep_position+1:]
             tgt_text = tokenizer.decode(tgt, skip_special_tokens=True)
-            ans = extract_answer(tgt_text)
+
+            sep_position2 = second_sep_positions[i].item()
+            tgt2 = input_ids_all_i[sep_position2+1:]
+            tgt_text2 = tokenizer.decode(tgt2, skip_special_tokens=True)
+            ans = extract_answer(tgt_text2)
             pred_text = tokenizer.decode(beam_output_i[0][sep_position+1:], skip_special_tokens=True)
-            pred_ans = extract_answer(pred_text)
+            pred_text2 = tokenizer.decode(beam_output_i[0][sep_position2+1:], skip_special_tokens=True)
+            pred_ans = extract_answer(pred_text2)
             if ans == pred_ans:
                 total_correct += 1
             print (f'Input: {tokenizer.decode(input_ids_all_i[:sep_position], skip_special_tokens=True)}')

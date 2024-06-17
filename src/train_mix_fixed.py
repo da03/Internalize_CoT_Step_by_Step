@@ -14,7 +14,7 @@ from transformers import AdamW
 
 from model import ImplicitModel
 from configuration_model import ImplicitModelConfig
-from data import CoTDataset, CoTDataCollator, extract_answer
+from fixeddata import CoTDataset, CoTDataCollator, extract_answer
 from utils import get_sep_position, batch_ids, save_model
 
 
@@ -183,6 +183,24 @@ def main():
     else:
         print (f'Loading from {args.from_pretrained}')
         model = ImplicitModel.from_pretrained(args.from_pretrained).to(device).to(ptdtype)
+    if 'gpt2' in args.model:
+        old_length = model.base_model.transformer.wpe.weight.shape[0]
+        if args.truncation > old_length:
+            #import pdb; pdb.set_trace()
+            print ('EXPANDING POSITIONs')
+            new_wpe = torch.nn.Embedding(args.truncation, model.base_model.transformer.wpe.weight.shape[-1])
+            new_wpe.weight.data[:old_length] = model.base_model.transformer.wpe.weight
+            new_wpe.weight.data[old_length:] = model.base_model.transformer.wpe.weight[-1].view(1, -1).expand(args.truncation-old_length, -1)
+            model.base_model.transformer.wpe = new_wpe
+
+            for block in model.base_model.transformer.h:
+                block.attn.register_buffer(
+                    "bias",
+                    torch.tril(torch.ones((args.truncation, args.truncation), dtype=torch.bool)).view(
+                        1, 1, args.truncation, args.truncation
+                ),
+                persistent=False,
+            )
     model = model.to(device).to(ptdtype)
     tokenizer = model.tokenizer
 

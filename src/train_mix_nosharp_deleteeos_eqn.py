@@ -12,9 +12,9 @@ import torch
 from torch.utils.data import DataLoader
 from transformers import AdamW
 
-from model import ImplicitModel
+from eqnmodel import ImplicitModel
 from configuration_model import ImplicitModelConfig
-from data import CoTDataset, CoTDataCollator, extract_answer
+from eqnnosharpdata import CoTDataset, CoTDataCollator, extract_answer
 from utils import get_sep_position, batch_ids, save_model
 
 
@@ -50,11 +50,12 @@ def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens, schedule
         input_ids_all = batch['input_ids_all'].to(device)
         labels = batch['labels_all'].to(device)
         # Remove answer part
-        sep_positions = get_sep_position(input_ids_all, tokenizer.eos_token_id)
+        eos_token_id = tokenizer(' =')['input_ids'][0]
+        sep_positions = get_sep_position(input_ids_all, eos_token_id)
         input_ids = input_ids_all[:, :sep_positions.max()+1]
         batch_size = input_ids.shape[0]
-        first_sep_positions = get_sep_position(input_ids_all, tokenizer.eos_token_id)
-        second_sep_positions = get_sep_position(input_ids_all, tokenizer.eos_token_id, skip=1)
+        first_sep_positions = get_sep_position(input_ids_all, eos_token_id)
+        second_sep_positions = get_sep_position(input_ids_all, eos_token_id, skip=1)
 
         if scheduled_to_remove > 0 or removal_smoothing_lambda != float('inf'):
             if keep_position:
@@ -72,11 +73,14 @@ def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens, schedule
                 removal_to_positions = second_sep_positions
                 removal_from_positions = second_sep_positions - to_remove
 
+            all_cot_removed_in_batch = True
             for batch_id in range(input_ids_all.shape[0]):
                 removal_from_position = removal_from_positions[batch_id]
                 removal_to_position = removal_to_positions[batch_id]
                 removal_from_position = max(removal_from_position, first_sep_positions[batch_id]+1)
-                removal_to_position = min(removal_to_position, second_sep_positions[batch_id])
+                if removal_to_position < second_sep_positions[batch_id] + 1:
+                    all_cot_removed_in_batch = False
+                removal_to_position = min(removal_to_position, second_sep_positions[batch_id] + 1)
                 if keep_position:
                     position_ids_all[batch_id, removal_from_position-1:] += removal_to_position-removal_from_position
                 input_ids_all_tmp.append(torch.cat((input_ids_all[batch_id, :removal_from_position], input_ids_all[batch_id, removal_to_position:]), dim=-1))
@@ -96,6 +100,9 @@ def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens, schedule
 
         # Generate
         stop_on_two_eos = True
+        if all_cot_removed_in_batch:
+            stop_on_two_eos = False
+        stop_on_two_eos = False
         if keep_position:
             position_ids = position_ids_all[:, :input_ids.shape[-1]]
         beam_output = model.generate(
@@ -110,12 +117,20 @@ def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens, schedule
             sep_position = sep_positions[i].item()
             tgt = input_ids_all_i[sep_position+1:]
             tgt_text = tokenizer.decode(tgt, skip_special_tokens=True)
+
+            #sep_position2 = second_sep_positions[i].item()
+            #tgt2 = input_ids_all_i[sep_position2+1:]
+            #tgt_text2 = tokenizer.decode(tgt2, skip_special_tokens=True)
+            #ans = extract_answer(tgt_text2)
             ans = extract_answer(tgt_text)
             pred_text = tokenizer.decode(beam_output_i[0][sep_position+1:], skip_special_tokens=True)
+            #pred_text2 = tokenizer.decode(beam_output_i[0][sep_position2+1:], skip_special_tokens=True)
+            #pred_ans = extract_answer(pred_text2)
             pred_ans = extract_answer(pred_text)
             if ans == pred_ans:
                 total_correct += 1
-            print (f'Input: {tokenizer.decode(input_ids_all_i[:sep_position], skip_special_tokens=True)}')
+            #print (f'Input: {tokenizer.decode(input_ids_all_i[:sep_position], skip_special_tokens=True)}')
+            print (f'Input: {tokenizer.decode(input_ids_all_i[:sep_position+1], skip_special_tokens=False)}')
             print (f'Target: {tgt_text}')
             print (f'Predicted: {pred_text}')
             print ('')
@@ -147,6 +162,7 @@ def main():
     parser.add_argument('--remove_start_from', type=int, default=0)
     parser.add_argument('--seed', type=int, default=1234)
     parser.add_argument('--max_val_size', type=int, default=32)
+    parser.add_argument('--start_epoch_from', type=int, default=0)
     parser.add_argument('--max_grad_norm', type=float, default=1.0)
     parser.add_argument('--bf16', action='store_true')
     parser.set_defaults(bf16=False)
@@ -183,6 +199,24 @@ def main():
     else:
         print (f'Loading from {args.from_pretrained}')
         model = ImplicitModel.from_pretrained(args.from_pretrained).to(device).to(ptdtype)
+    if 'gpt2' in args.model:
+        old_length = model.base_model.transformer.wpe.weight.shape[0]
+        if args.truncation > old_length:
+            #import pdb; pdb.set_trace()
+            print ('EXPANDING POSITIONs')
+            new_wpe = torch.nn.Embedding(args.truncation, model.base_model.transformer.wpe.weight.shape[-1])
+            new_wpe.weight.data[:old_length] = model.base_model.transformer.wpe.weight
+            new_wpe.weight.data[old_length:] = model.base_model.transformer.wpe.weight[-1].view(1, -1).expand(args.truncation-old_length, -1)
+            model.base_model.transformer.wpe = new_wpe
+
+            for block in model.base_model.transformer.h:
+                block.attn.register_buffer(
+                    "bias",
+                    torch.tril(torch.ones((args.truncation, args.truncation), dtype=torch.bool)).view(
+                        1, 1, args.truncation, args.truncation
+                ),
+                persistent=False,
+            )
     model = model.to(device).to(ptdtype)
     tokenizer = model.tokenizer
 
@@ -250,7 +284,9 @@ def main():
     data_loading_counter = -1
     train_dataset = None
     train_dataloader = None
-    for epoch in range(args.epochs):
+    if args.start_epoch_from > 0:
+        data_loading_counter += args.start_epoch_from
+    for epoch in range(args.start_epoch_from, args.epochs):
         data_loading_counter += 1
         # Load data
         if train_dataset is not None:
@@ -289,8 +325,10 @@ def main():
             labels = batch['labels_all'].to(device)
             batch_size = input_ids.shape[0]
 
-            first_sep_positions = get_sep_position(input_ids, tokenizer.eos_token_id)
-            second_sep_positions = get_sep_position(input_ids, tokenizer.eos_token_id, skip=1)
+            eos_token_id = tokenizer(' =')['input_ids'][0]
+            #import pdb; pdb.set_trace()
+            first_sep_positions = get_sep_position(input_ids, eos_token_id)
+            second_sep_positions = get_sep_position(input_ids, eos_token_id, skip=1)
 
             all_cot_removed_in_batch = False
             if scheduled_to_remove > 0 or args.removal_smoothing_lambda != float('inf'):
@@ -314,9 +352,9 @@ def main():
                     removal_from_position = removal_from_positions[batch_id]
                     removal_to_position = removal_to_positions[batch_id]
                     removal_from_position = max(removal_from_position, first_sep_positions[batch_id]+1)
-                    if removal_to_position < second_sep_positions[batch_id]:
+                    if removal_to_position < second_sep_positions[batch_id] + 1:
                         all_cot_removed_in_batch = False
-                    removal_to_position = min(removal_to_position, second_sep_positions[batch_id])
+                    removal_to_position = min(removal_to_position, second_sep_positions[batch_id] + 1)
                     if args.keep_position:
                         position_ids[batch_id, removal_from_position-1:] += removal_to_position-removal_from_position
                     input_ids_tmp.append(torch.cat((input_ids[batch_id, :removal_from_position], input_ids[batch_id, removal_to_position:]), dim=-1))

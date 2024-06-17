@@ -27,9 +27,9 @@ export REMOVAL_SIDE=left
 export PRETRAIN_EPOCHS=0
 export SEED=3456
 export MAX_VAL_SIZE=32
-export SAVE=train_models/mix_${NUM_DIGITS_MIN}_to_${NUM_DIGITS_MAX}_includingzero_padinput_d${REMOVE_PER_EPOCH}/gpt2
+export SAVE=train_models/mix_${NUM_DIGITS_MIN}_to_${NUM_DIGITS_MAX}_includingzero_padinput_d${REMOVE_PER_EPOCH}_nosharp/gpt2
 mkdir -p $SAVE
-TOKENIZERS_PARALLELISM=false CUDA_VISIBLE_DEVICES=0 stdbuf -oL -eL python src/train_mix.py \
+TOKENIZERS_PARALLELISM=false CUDA_VISIBLE_DEVICES=0 stdbuf -oL -eL python src/train_mix_nosharp.py \
     --model ${MODEL} \
     --data_folder ${FOLDER} \
     --epochs ${EPOCHS} \

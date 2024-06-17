@@ -11,7 +11,7 @@ def extract_answer(text):
         return text.strip().replace(',', '')
     else:
         _, ans = text.strip().split('####', 1)
-        ans = '####' + ans
+        #ans = '####' + ans
         ans = ans.strip().replace(',', '')
         return ans
 
@@ -57,7 +57,7 @@ class CoTDataset(Dataset):
             #edited_sents_cot.append(sent)
             #sent = ' {} {} '.format(src, eos_tok)
             #edited_sents_only.append(sent)
-            sent = ' {} {} '.format(src, eos_tok) + cot + ' {} '.format(eos_tok) + ans + ' {}'.format(eos_tok)
+            sent = '{} {} '.format(src, '=') + cot + ' {} '.format('=') + ans + eos_tok
             #edited_sents_all.append(sent)
             #sent = ' {} {} '.format(src, eos_tok) + ans + ' {}'.format(eos_tok)
             #edited_sents_nocot.append(sent)
@@ -70,6 +70,7 @@ class CoTDataset(Dataset):
                 print (len(self.examples_all))
 
         separator = tokenizer.eos_token_id #tokenizer(eos_tok, add_special_tokens=False)['input_ids'][0]
+        separator = tokenizer(' =')['input_ids'][0]
         self.separator = separator
 
     def __len__(self):

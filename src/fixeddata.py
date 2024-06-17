@@ -57,7 +57,7 @@ class CoTDataset(Dataset):
             #edited_sents_cot.append(sent)
             #sent = ' {} {} '.format(src, eos_tok)
             #edited_sents_only.append(sent)
-            sent = ' {} {} '.format(src, eos_tok) + cot + ' {} '.format(eos_tok) + ans + ' {}'.format(eos_tok)
+            sent = '{} {} '.format(src, eos_tok) + cot + ' {} '.format(eos_tok) + ans + ' {}'.format(eos_tok)
             #edited_sents_all.append(sent)
             #sent = ' {} {} '.format(src, eos_tok) + ans + ' {}'.format(eos_tok)
             #edited_sents_nocot.append(sent)
