@@ -56,6 +56,7 @@ def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens, schedule
         batch_size = input_ids.shape[0]
         first_sep_positions = get_sep_position(input_ids_all, eos_token_id)
         second_sep_positions = get_sep_position(input_ids_all, eos_token_id, skip=1)
+        eos_positions = get_sep_position(input_ids_all, tokenizer.eos_token_id)
 
         if scheduled_to_remove > 0 or removal_smoothing_lambda != float('inf'):
             if keep_position:
@@ -75,6 +76,7 @@ def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens, schedule
 
             all_cot_removed_in_batch = True
             for batch_id in range(input_ids_all.shape[0]):
+                eos_position = eos_positions[batch_id]
                 removal_from_position = removal_from_positions[batch_id]
                 removal_to_position = removal_to_positions[batch_id]
                 removal_from_position = max(removal_from_position, first_sep_positions[batch_id]+1)
@@ -83,8 +85,8 @@ def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens, schedule
                 removal_to_position = min(removal_to_position, second_sep_positions[batch_id] + 1)
                 if keep_position:
                     position_ids_all[batch_id, removal_from_position-1:] += removal_to_position-removal_from_position
-                input_ids_all_tmp.append(torch.cat((input_ids_all[batch_id, :removal_from_position], input_ids_all[batch_id, removal_to_position:]), dim=-1))
-                labels_tmp.append(torch.cat((labels[batch_id, :removal_from_position], labels[batch_id, removal_to_position:]), dim=-1))
+                input_ids_all_tmp.append(torch.cat((input_ids_all[batch_id, :removal_from_position], input_ids_all[batch_id, removal_to_position:eos_position+1]), dim=-1))
+                labels_tmp.append(torch.cat((labels[batch_id, :removal_from_position], labels[batch_id, removal_to_position:eos_position+1]), dim=-1))
             input_ids_all = batch_ids(input_ids_all_tmp, tokenizer.eos_token_id, device, input_ids_all.dtype)
             labels = batch_ids(labels_tmp, tokenizer.eos_token_id, device, input_ids.dtype)
 
@@ -329,8 +331,10 @@ def main():
             #import pdb; pdb.set_trace()
             first_sep_positions = get_sep_position(input_ids, eos_token_id)
             second_sep_positions = get_sep_position(input_ids, eos_token_id, skip=1)
+            eos_positions = get_sep_position(input_ids, tokenizer.eos_token_id)
 
             all_cot_removed_in_batch = False
+            #import pdb; pdb.set_trace()
             if scheduled_to_remove > 0 or args.removal_smoothing_lambda != float('inf'):
                 input_ids_tmp = []
                 labels_tmp = []
@@ -349,6 +353,7 @@ def main():
 
                 all_cot_removed_in_batch = True
                 for batch_id in range(input_ids.shape[0]):
+                    eos_position = eos_positions[batch_id]
                     removal_from_position = removal_from_positions[batch_id]
                     removal_to_position = removal_to_positions[batch_id]
                     removal_from_position = max(removal_from_position, first_sep_positions[batch_id]+1)
@@ -357,8 +362,8 @@ def main():
                     removal_to_position = min(removal_to_position, second_sep_positions[batch_id] + 1)
                     if args.keep_position:
                         position_ids[batch_id, removal_from_position-1:] += removal_to_position-removal_from_position
-                    input_ids_tmp.append(torch.cat((input_ids[batch_id, :removal_from_position], input_ids[batch_id, removal_to_position:]), dim=-1))
-                    labels_tmp.append(torch.cat((labels[batch_id, :removal_from_position], labels[batch_id, removal_to_position:]), dim=-1))
+                    input_ids_tmp.append(torch.cat((input_ids[batch_id, :removal_from_position], input_ids[batch_id, removal_to_position:eos_position+1]), dim=-1))
+                    labels_tmp.append(torch.cat((labels[batch_id, :removal_from_position], labels[batch_id, removal_to_position:eos_position+1]), dim=-1))
                 input_ids = batch_ids(input_ids_tmp, tokenizer.eos_token_id, device, input_ids.dtype)
                 labels = batch_ids(labels_tmp, tokenizer.eos_token_id, device, input_ids.dtype)
                 if not all_cot_removed_in_batch:

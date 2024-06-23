@@ -131,10 +131,26 @@ class ImplicitModel(nn.Module):
         return beam_output
 
     @classmethod
-    def from_pretrained(self, pretrained_path):
+    def from_pretrained(self, pretrained_path, truncation=-1):
         config = ImplicitModelConfig.from_pretrained(pretrained_path)
         model = ImplicitModel(config)
-        state_dict = torch.load(os.path.join(pretrained_path, 'state_dict.bin'))
+        old_length = model.base_model.transformer.wpe.weight.shape[0]
+        if truncation > old_length:
+            print ('EXPANDING POSITIONs')
+            new_wpe = torch.nn.Embedding(truncation, model.base_model.transformer.wpe.weight.shape[-1])
+            new_wpe.weight.data[:old_length] = model.base_model.transformer.wpe.weight
+            new_wpe.weight.data[old_length:] = model.base_model.transformer.wpe.weight[-1].view(1, -1).expand(truncation-old_length, -1)
+            model.base_model.transformer.wpe = new_wpe
+
+            for block in model.base_model.transformer.h:
+                block.attn.register_buffer(
+                    "bias",
+                    torch.tril(torch.ones((truncation, truncation), dtype=torch.bool)).view(
+                        1, 1, truncation, truncation
+                ),
+                persistent=False,
+            )
+        state_dict = torch.load(os.path.join(pretrained_path, 'state_dict.bin'), map_location=torch.device('cpu'))
         model.load_state_dict(state_dict, strict=True)
         return model
 
