@@ -1,6 +1,6 @@
 # Internalize CoT Step by Step
 
-This repository contains code to reproduce the results from our paper "From Explicit CoT to Implicit CoT: Learning to Internalize CoT Step by Step".
+This repository contains code to reproduce the results from our paper [From Explicit CoT to Implicit CoT: Learning to Internalize CoT Step by Step](https://arxiv.org/pdf/2405.14838).
 
 ## Online Demo
 
