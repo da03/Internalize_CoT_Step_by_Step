@@ -2,6 +2,12 @@
 
 This repository contains code to reproduce the results from our paper "From Explicit CoT to Implicit CoT: Learning to Internalize CoT Step by Step".
 
+## Online Demo
+
+An online demo is available at [gpt2-multiplication-calculator](https://huggingface.co/spaces/yuntian-deng/gpt2-multiplication-calculator). The inference code and model behind this demo can be accessed in the [app.py](https://huggingface.co/spaces/yuntian-deng/gpt2-multiplication-calculator/blob/main/app.py) file. 
+
+Please note that this online demo uses a slightly different data format than the one used in this repository. Specifically, it employs `=` instead of `<|endoftext|>` as the separator to ensure compatibility with standard Hugging Face transformer generation code, and the `####` symbols in the answer part are removed to provide a cleaner output. Despite these changes, the proposed approach still works effectively, demonstrating the generality of the method. Additionally, the online demo merges data with varying input digit lengths for training, allowing a single model to handle inputs of different digit counts. In contrast, the code in this repository trains one model for each number of digits for controlled experiments.
+
 ## Prerequisites
 
 * [PyTorch](https://pytorch.org/get-started/locally/)
