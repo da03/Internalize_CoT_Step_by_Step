@@ -81,7 +81,7 @@ def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens, schedule
                 input_ids_all_tmp.append(torch.cat((input_ids_all[batch_id, :removal_from_position], input_ids_all[batch_id, removal_to_position:]), dim=-1))
                 labels_tmp.append(torch.cat((labels[batch_id, :removal_from_position], labels[batch_id, removal_to_position:]), dim=-1))
             input_ids_all = batch_ids(input_ids_all_tmp, tokenizer.eos_token_id, device, input_ids_all.dtype)
-            labels = batch_ids(labels_tmp, tokenizer.eos_token_id, device, input_ids.dtype)
+            labels = batch_ids(labels_tmp, -100, device, input_ids.dtype)
 
         with ctx:
             if keep_position:
@@ -178,7 +178,7 @@ def main():
 
     # Create model
     if args.from_pretrained is None:
-        config = ImplicitModelConfig(model=args.model)
+        config = ImplicitModelConfig(base_model=args.model)
         model = ImplicitModel(config).to(device).to(ptdtype)
     else:
         print (f'Loading from {args.from_pretrained}')
@@ -284,7 +284,7 @@ def main():
                     input_ids_tmp.append(torch.cat((input_ids[batch_id, :removal_from_position], input_ids[batch_id, removal_to_position:]), dim=-1))
                     labels_tmp.append(torch.cat((labels[batch_id, :removal_from_position], labels[batch_id, removal_to_position:]), dim=-1))
                 input_ids = batch_ids(input_ids_tmp, tokenizer.eos_token_id, device, input_ids.dtype)
-                labels = batch_ids(labels_tmp, tokenizer.eos_token_id, device, input_ids.dtype)
+                labels = batch_ids(labels_tmp, -100, device, input_ids.dtype)
                 if not all_cot_removed_in_batch:
                     best_val_accuracy = float('-inf')
             print (input_ids.shape)
