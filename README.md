@@ -163,6 +163,6 @@ TOKENIZERS_PARALLELISM=false CUDA_VISIBLE_DEVICES=0 stdbuf -oL -eL python src/tr
     --reset_optimizer \
     --bf16 \
     --max_len_train ${MAX_LEN_TRAIN} \
-    --save_model /tmp/${SAVE} \
+    --save_model ${SAVE} \
     > ${SAVE}/log.train 2>&1
 ```
