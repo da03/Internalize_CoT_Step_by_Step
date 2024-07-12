@@ -1,6 +1,7 @@
 import math
 import argparse
 import os
+import glob
 import sys
 import tqdm
 import inspect
@@ -11,9 +12,9 @@ import torch
 from torch.utils.data import DataLoader
 from transformers import AdamW
 
-from model import ImplicitModel
+from eqnmodel import ImplicitModel
 from configuration_model import ImplicitModelConfig
-from data import CoTDataset, CoTDataCollator, extract_answer
+from eqnnosharpdata import CoTDataset, CoTDataCollator, extract_answer
 from utils import get_sep_position, batch_ids, save_model
 
 
@@ -49,12 +50,13 @@ def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens, schedule
         input_ids_all = batch['input_ids_all'].to(device)
         labels = batch['labels_all'].to(device)
         # Remove answer part
-        sep_positions = get_sep_position(input_ids_all, tokenizer.eos_token_id)
+        eos_token_id = tokenizer(' =')['input_ids'][0]
+        sep_positions = get_sep_position(input_ids_all, eos_token_id)
         input_ids = input_ids_all[:, :sep_positions.max()+1]
         batch_size = input_ids.shape[0]
-        first_sep_positions = get_sep_position(input_ids_all, tokenizer.eos_token_id)
-        second_sep_positions = get_sep_position(input_ids_all, tokenizer.eos_token_id, skip=1)
-        eos_positions = get_sep_position(input_ids_all, tokenizer.eos_token_id, skip=2)
+        first_sep_positions = get_sep_position(input_ids_all, eos_token_id)
+        second_sep_positions = get_sep_position(input_ids_all, eos_token_id, skip=1)
+        eos_positions = get_sep_position(input_ids_all, tokenizer.eos_token_id)
 
         if scheduled_to_remove > 0 or removal_smoothing_lambda != float('inf'):
             if keep_position:
@@ -72,12 +74,15 @@ def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens, schedule
                 removal_to_positions = second_sep_positions
                 removal_from_positions = second_sep_positions - to_remove
 
+            all_cot_removed_in_batch = True
             for batch_id in range(input_ids_all.shape[0]):
                 eos_position = eos_positions[batch_id]
                 removal_from_position = removal_from_positions[batch_id]
                 removal_to_position = removal_to_positions[batch_id]
                 removal_from_position = max(removal_from_position, first_sep_positions[batch_id]+1)
-                removal_to_position = min(removal_to_position, second_sep_positions[batch_id])
+                if removal_to_position < second_sep_positions[batch_id] + 1:
+                    all_cot_removed_in_batch = False
+                removal_to_position = min(removal_to_position, second_sep_positions[batch_id] + 1)
                 if keep_position:
                     position_ids_all[batch_id, removal_from_position-1:] += removal_to_position-removal_from_position
                 input_ids_all_tmp.append(torch.cat((input_ids_all[batch_id, :removal_from_position], input_ids_all[batch_id, removal_to_position:eos_position+1]), dim=-1))
@@ -97,6 +102,9 @@ def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens, schedule
 
         # Generate
         stop_on_two_eos = True
+        if all_cot_removed_in_batch:
+            stop_on_two_eos = False
+        stop_on_two_eos = False
         if keep_position:
             position_ids = position_ids_all[:, :input_ids.shape[-1]]
         beam_output = model.generate(
@@ -116,7 +124,8 @@ def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens, schedule
             pred_ans = extract_answer(pred_text)
             if ans == pred_ans:
                 total_correct += 1
-            print (f'Input: {tokenizer.decode(input_ids_all_i[:sep_position], skip_special_tokens=True)}')
+            #print (f'Input: {tokenizer.decode(input_ids_all_i[:sep_position], skip_special_tokens=True)}')
+            print (f'Input: {tokenizer.decode(input_ids_all_i[:sep_position+1], skip_special_tokens=False)}')
             print (f'Target: {tgt_text}')
             print (f'Predicted: {pred_text}')
             print ('')
@@ -130,9 +139,7 @@ def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens, schedule
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, default='gpt2')
-    parser.add_argument('--train_path', type=str, required=True)
-    parser.add_argument('--val_path', type=str, required=True)
-    parser.add_argument('--test_path', type=str, default=None)
+    parser.add_argument('--data_folder', type=str, required=True)
     parser.add_argument('--epochs', type=int, default=1)
     parser.add_argument('--lr', type=float, default=5e-5)
     parser.add_argument('--batch_size', type=int, default=32)
@@ -149,6 +156,8 @@ def main():
     parser.add_argument('--from_pretrained', type=str, default=None)
     parser.add_argument('--remove_start_from', type=int, default=0)
     parser.add_argument('--seed', type=int, default=1234)
+    parser.add_argument('--max_val_size', type=int, default=32)
+    parser.add_argument('--start_epoch_from', type=int, default=0)
     parser.add_argument('--max_grad_norm', type=float, default=1.0)
     parser.add_argument('--bf16', action='store_true')
     parser.set_defaults(bf16=False)
@@ -158,6 +167,8 @@ def main():
     parser.set_defaults(keep_position=False)
     parser.add_argument('--reinitialize_weights', action='store_true')
     parser.set_defaults(reinitialize_weights=False)
+    parser.add_argument('--disable_dropout', action='store_true')
+    parser.set_defaults(disable_dropout=False)
     args = parser.parse_args()
 
     if args.remove_all_when_remove_beyond == 'inf':
@@ -184,7 +195,25 @@ def main():
         model = ImplicitModel(config).to(device).to(ptdtype)
     else:
         print (f'Loading from {args.from_pretrained}')
-        model = ImplicitModel.from_pretrained(args.from_pretrained).to(device).to(ptdtype)
+        model = ImplicitModel.from_pretrained(args.from_pretrained, args.truncation).to(device).to(ptdtype)
+    if 'gpt2' in args.model:
+        old_length = model.base_model.transformer.wpe.weight.shape[0]
+        if args.truncation > old_length and args.from_pretrained is None:
+            #import pdb; pdb.set_trace()
+            print ('EXPANDING POSITIONs')
+            new_wpe = torch.nn.Embedding(args.truncation, model.base_model.transformer.wpe.weight.shape[-1])
+            new_wpe.weight.data[:old_length] = model.base_model.transformer.wpe.weight
+            new_wpe.weight.data[old_length:] = model.base_model.transformer.wpe.weight[-1].view(1, -1).expand(args.truncation-old_length, -1)
+            model.base_model.transformer.wpe = new_wpe
+
+            for block in model.base_model.transformer.h:
+                block.attn.register_buffer(
+                    "bias",
+                    torch.tril(torch.ones((args.truncation, args.truncation), dtype=torch.bool)).view(
+                        1, 1, args.truncation, args.truncation
+                ),
+                persistent=False,
+            )
     model = model.to(device).to(ptdtype)
     tokenizer = model.tokenizer
 
@@ -197,13 +226,29 @@ def main():
 
     # Load data
     collate_fn = CoTDataCollator(tokenizer)
-    train_dataset = CoTDataset(tokenizer, args.train_path, args.truncation)
-    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, collate_fn=collate_fn, shuffle=True)
-    val_dataset = CoTDataset(tokenizer, args.val_path, args.truncation)
-    val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, collate_fn=collate_fn, shuffle=False)
-    if args.test_path:
-        test_dataset = CoTDataset(tokenizer, args.test_path, args.truncation)
-        test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, collate_fn=collate_fn, shuffle=False)
+
+    train_paths = glob.glob(os.path.join(args.data_folder, 'train_*.txt'))
+    train_paths_sorted = list(sorted(train_paths, key=lambda x: int(os.path.splitext(os.path.basename(x))[0].split('_')[1])))
+    val_folders = glob.glob(os.path.join(args.data_folder, '*_by_*'))
+
+    def sort_key(folder_name):
+        parts = os.path.basename(folder_name).split('_by_')
+        first_num = int(parts[0])
+        second_num = int(parts[1])
+        return (first_num, second_num)
+
+    # Sort the folder names using the custom key
+    val_folders_sorted = list(sorted(val_folders, key=sort_key))
+
+    val_dataloaders = []
+    for val_folder in val_folders_sorted:
+        setting = os.path.basename(val_folder)
+        val_path = os.path.join(val_folder, 'valid.txt')
+        val_dataset = CoTDataset(tokenizer, val_path, args.truncation, max_size=args.max_val_size)
+        val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, collate_fn=collate_fn, shuffle=False)
+        val_dataloaders.append((setting, val_dataloader))
+        
+
 
     # Create Optimizer
     trainable_params = list(model.parameters())
@@ -220,19 +265,37 @@ def main():
 
     position_ids = None
 
-    steps_per_epoch = len(train_dataloader)
-    steps_per_removed_token = int(round(steps_per_epoch / args.remove_per_epoch))
     remove_step_counter = 0
     best_val_accuracy = float('-inf')
 
     all_cot_removed_in_prev_batch = False
-    for epoch in range(args.epochs):
+    data_loading_counter = -1
+    train_dataset = None
+    train_dataloader = None
+    if args.start_epoch_from > 0:
+        data_loading_counter += args.start_epoch_from
+    for epoch in range(args.start_epoch_from, args.epochs):
+        data_loading_counter += 1
+        # Load data
+        if train_dataset is not None:
+            del train_dataset
+        if train_dataloader is not None:
+            del train_dataloader
+        train_path = train_paths_sorted[data_loading_counter % len(train_paths_sorted)]
+        print (f'loading data for epoch {epoch} from {train_path}')
+        train_dataset = CoTDataset(tokenizer, train_path, args.truncation, max_size=-1)
+        train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, collate_fn=collate_fn, shuffle=True)
+        steps_per_epoch = len(train_dataloader)
+        steps_per_removed_token = int(round(steps_per_epoch / args.remove_per_epoch))
         if scheduled_to_remove < float('inf'):
             scheduled_to_remove = int(round(scheduled_to_remove))
         if scheduled_to_remove >= args.remove_all_when_remove_beyond:
             scheduled_to_remove = float('inf') # remove all
         print(f"Epoch {epoch}. Scheduled to remove: {scheduled_to_remove}")
-        model.train()
+        if not args.disable_dropout:
+            model.train()
+        else:
+            print ('disable dropout')
         for batch in tqdm.tqdm(train_dataloader):
             prev_scheduled_to_remove = scheduled_to_remove
             if remove_step_counter == steps_per_removed_token or steps_per_removed_token == 0:
@@ -253,9 +316,11 @@ def main():
             labels = batch['labels_all'].to(device)
             batch_size = input_ids.shape[0]
 
-            first_sep_positions = get_sep_position(input_ids, tokenizer.eos_token_id)
-            second_sep_positions = get_sep_position(input_ids, tokenizer.eos_token_id, skip=1)
-            eos_positions = get_sep_position(input_ids, tokenizer.eos_token_id, skip=2)
+            eos_token_id = tokenizer(' =')['input_ids'][0]
+            #import pdb; pdb.set_trace()
+            first_sep_positions = get_sep_position(input_ids, eos_token_id)
+            second_sep_positions = get_sep_position(input_ids, eos_token_id, skip=1)
+            eos_positions = get_sep_position(input_ids, tokenizer.eos_token_id)
 
             all_cot_removed_in_batch = False
             if scheduled_to_remove > 0 or args.removal_smoothing_lambda != float('inf'):
@@ -280,9 +345,9 @@ def main():
                     removal_from_position = removal_from_positions[batch_id]
                     removal_to_position = removal_to_positions[batch_id]
                     removal_from_position = max(removal_from_position, first_sep_positions[batch_id]+1)
-                    if removal_to_position < second_sep_positions[batch_id]:
+                    if removal_to_position < second_sep_positions[batch_id] + 1:
                         all_cot_removed_in_batch = False
-                    removal_to_position = min(removal_to_position, second_sep_positions[batch_id])
+                    removal_to_position = min(removal_to_position, second_sep_positions[batch_id] + 1)
                     if args.keep_position:
                         position_ids[batch_id, removal_from_position-1:] += removal_to_position-removal_from_position
                     input_ids_tmp.append(torch.cat((input_ids[batch_id, :removal_from_position], input_ids[batch_id, removal_to_position:eos_position+1]), dim=-1))
@@ -291,7 +356,7 @@ def main():
                 labels = batch_ids(labels_tmp, -100, device, input_ids.dtype)
                 if not all_cot_removed_in_batch:
                     best_val_accuracy = float('-inf')
-            print (input_ids.shape)
+            #print (input_ids.shape)
             all_cot_removed_in_prev_batch = all_cot_removed_in_batch
             if args.max_len_train > 0 and input_ids.shape[-1] > args.max_len_train:
                 print ('skipped')
@@ -314,15 +379,16 @@ def main():
                 print (f"Step: {step}. PPL: {ppl}. Token Accuracy: {token_accuracy}")
                 sys.stdout.flush()
             step += 1
-        print (f'Scheduled to remove: {scheduled_to_remove}')
-        accuracy, token_accuracy, ppl = evaluate(val_dataloader, tokenizer, device, ctx, model, args.max_new_tokens, scheduled_to_remove, args.removal_side, args.removal_smoothing_lambda, lambda_distribution, keep_position=args.keep_position, disable_random_removal_offset=True)
-        print (f'Disable Offset Val. PPL: {ppl}; Accuracy: {accuracy}; Token Accuracy: {token_accuracy}.')
-        if accuracy > best_val_accuracy:
-            print ('***best so far or removed more CoT tokens***')
-            best_val_accuracy = accuracy
-            if args.test_path:
-                accuracy, token_accuracy, ppl = evaluate(test_dataloader, tokenizer, device, ctx, model, args.max_new_tokens, scheduled_to_remove, args.removal_side, args.removal_smoothing_lambda, lambda_distribution, keep_position=args.keep_position, disable_random_removal_offset=True)
-                print (f'Test. PPL: {ppl}; Accuracy: {accuracy}; Token Accuracy: {token_accuracy}.')
+        for val_setting, val_dataloader in val_dataloaders:
+            print (f'Scheduled to remove: {scheduled_to_remove}')
+            accuracy, token_accuracy, ppl = evaluate(val_dataloader, tokenizer, device, ctx, model, args.max_new_tokens, scheduled_to_remove, args.removal_side, args.removal_smoothing_lambda, lambda_distribution, keep_position=args.keep_position, disable_random_removal_offset=True)
+            print (f'{val_setting}: Disable Offset Val. PPL: {ppl}; Accuracy: {accuracy}; Token Accuracy: {token_accuracy}.')
+            #if accuracy > best_val_accuracy:
+            #    print ('***best so far or removed more CoT tokens***')
+            #    best_val_accuracy = accuracy
+            #    if args.test_path:
+            #        accuracy, token_accuracy, ppl = evaluate(test_dataloader, tokenizer, device, ctx, model, args.max_new_tokens, scheduled_to_remove, args.removal_side, args.removal_smoothing_lambda, lambda_distribution, keep_position=args.keep_position, disable_random_removal_offset=True)
+            #        print (f'Test. PPL: {ppl}; Accuracy: {accuracy}; Token Accuracy: {token_accuracy}.')
         model.save_pretrained(os.path.join(args.save_model, f'checkpoint_{epoch}'))
 
 if __name__ == "__main__":

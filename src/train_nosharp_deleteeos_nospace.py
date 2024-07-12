@@ -13,7 +13,7 @@ from transformers import AdamW
 
 from model import ImplicitModel
 from configuration_model import ImplicitModelConfig
-from data import CoTDataset, CoTDataCollator, extract_answer
+from nospacenosharpdata import CoTDataset, CoTDataCollator, extract_answer
 from utils import get_sep_position, batch_ids, save_model
 
 
@@ -72,12 +72,15 @@ def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens, schedule
                 removal_to_positions = second_sep_positions
                 removal_from_positions = second_sep_positions - to_remove
 
+            all_cot_removed_in_batch = True
             for batch_id in range(input_ids_all.shape[0]):
                 eos_position = eos_positions[batch_id]
                 removal_from_position = removal_from_positions[batch_id]
                 removal_to_position = removal_to_positions[batch_id]
                 removal_from_position = max(removal_from_position, first_sep_positions[batch_id]+1)
-                removal_to_position = min(removal_to_position, second_sep_positions[batch_id])
+                if removal_to_position < second_sep_positions[batch_id] + 1:
+                    all_cot_removed_in_batch = False
+                removal_to_position = min(removal_to_position, second_sep_positions[batch_id] + 1)
                 if keep_position:
                     position_ids_all[batch_id, removal_from_position-1:] += removal_to_position-removal_from_position
                 input_ids_all_tmp.append(torch.cat((input_ids_all[batch_id, :removal_from_position], input_ids_all[batch_id, removal_to_position:eos_position+1]), dim=-1))
@@ -97,6 +100,8 @@ def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens, schedule
 
         # Generate
         stop_on_two_eos = True
+        if all_cot_removed_in_batch:
+            stop_on_two_eos = False
         if keep_position:
             position_ids = position_ids_all[:, :input_ids.shape[-1]]
         beam_output = model.generate(
@@ -280,9 +285,9 @@ def main():
                     removal_from_position = removal_from_positions[batch_id]
                     removal_to_position = removal_to_positions[batch_id]
                     removal_from_position = max(removal_from_position, first_sep_positions[batch_id]+1)
-                    if removal_to_position < second_sep_positions[batch_id]:
+                    if removal_to_position < second_sep_positions[batch_id] + 1:
                         all_cot_removed_in_batch = False
-                    removal_to_position = min(removal_to_position, second_sep_positions[batch_id])
+                    removal_to_position = min(removal_to_position, second_sep_positions[batch_id] + 1)
                     if args.keep_position:
                         position_ids[batch_id, removal_from_position-1:] += removal_to_position-removal_from_position
                     input_ids_tmp.append(torch.cat((input_ids[batch_id, :removal_from_position], input_ids[batch_id, removal_to_position:eos_position+1]), dim=-1))
@@ -291,7 +296,7 @@ def main():
                 labels = batch_ids(labels_tmp, -100, device, input_ids.dtype)
                 if not all_cot_removed_in_batch:
                     best_val_accuracy = float('-inf')
-            print (input_ids.shape)
+            #print (input_ids.shape)
             all_cot_removed_in_prev_batch = all_cot_removed_in_batch
             if args.max_len_train > 0 and input_ids.shape[-1] > args.max_len_train:
                 print ('skipped')

@@ -50,7 +50,9 @@ class ImplicitModel(nn.Module):
         return outputs
 
     def generate(self, input_ids, max_new_tokens=512, num_beams=1, stop_on_two_eos=True, position_ids=None):
-        sep_positions = get_sep_position(input_ids, self.tokenizer.eos_token_id)
+        eos_token_id = self.tokenizer(' =')['input_ids'][0]
+        eos_token_id = self.tokenizer(' =')['input_ids'][1]
+        sep_positions = get_sep_position(input_ids, eos_token_id)
         batch_size = input_ids.shape[0]
 
         # Since there's one eos after CoT and another after final answer, we need to wait for two eos
@@ -131,25 +133,25 @@ class ImplicitModel(nn.Module):
         return beam_output
 
     @classmethod
-    def from_pretrained(self, pretrained_path, truncation=-1):
+    def from_pretrained(self, pretrained_path, truncation):
         config = ImplicitModelConfig.from_pretrained(pretrained_path)
         model = ImplicitModel(config)
-        #old_length = model.base_model.transformer.wpe.weight.shape[0]
-        #if truncation > old_length:
-        #    print ('EXPANDING POSITIONs')
-        #    new_wpe = torch.nn.Embedding(truncation, model.base_model.transformer.wpe.weight.shape[-1])
-        #    new_wpe.weight.data[:old_length] = model.base_model.transformer.wpe.weight
-        #    new_wpe.weight.data[old_length:] = model.base_model.transformer.wpe.weight[-1].view(1, -1).expand(truncation-old_length, -1)
-        #    model.base_model.transformer.wpe = new_wpe
+        old_length = model.base_model.transformer.wpe.weight.shape[0]
+        if truncation > old_length:
+            print ('EXPANDING POSITIONs')
+            new_wpe = torch.nn.Embedding(truncation, model.base_model.transformer.wpe.weight.shape[-1])
+            new_wpe.weight.data[:old_length] = model.base_model.transformer.wpe.weight
+            new_wpe.weight.data[old_length:] = model.base_model.transformer.wpe.weight[-1].view(1, -1).expand(truncation-old_length, -1)
+            model.base_model.transformer.wpe = new_wpe
 
-        #    for block in model.base_model.transformer.h:
-        #        block.attn.register_buffer(
-        #            "bias",
-        #            torch.tril(torch.ones((truncation, truncation), dtype=torch.bool)).view(
-        #                1, 1, truncation, truncation
-        #        ),
-        #        persistent=False,
-        #    )
+            for block in model.base_model.transformer.h:
+                block.attn.register_buffer(
+                    "bias",
+                    torch.tril(torch.ones((truncation, truncation), dtype=torch.bool)).view(
+                        1, 1, truncation, truncation
+                ),
+                persistent=False,
+            )
         state_dict = torch.load(os.path.join(pretrained_path, 'state_dict.bin'), map_location=torch.device('cpu'))
         model.load_state_dict(state_dict, strict=True)
         return model

@@ -11,7 +11,7 @@ import inspect
 import logging
 import random
 from model import ImplicitModel
-from nosharpdata import CoTDataset, CoTDataCollator, extract_answer
+from nospacenosharpdata import CoTDataset, CoTDataCollator, extract_answer
 
 from utils import get_sep_position
 
