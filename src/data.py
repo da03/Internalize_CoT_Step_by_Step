@@ -26,7 +26,7 @@ def extract_cot(text):
         return cot
 
 class CoTDataset(Dataset):
-    def __init__(self, tokenizer, file_path, max_length=-1):
+    def __init__(self, tokenizer, file_path, max_length=-1, max_size=-1):
         assert os.path.isfile(file_path), f"Input file path {file_path} not found"
         print (f'Creating features from dataset file at {file_path}')
         eos_tok = tokenizer.eos_token
@@ -37,6 +37,9 @@ class CoTDataset(Dataset):
             #                                                                 and len(line.split('||')) ==2 )]
             lines = [line.strip().split('||') for line in f.readlines() if (len(line.strip()) > 0 and not line.strip().isspace()
                                                                              and len(line.strip().split('||')) ==2 )]
+        if max_size > 0:
+            print (f'truncated to {max_size}')
+            lines = lines[:max_size]
         src_lines, tgt_lines = list(zip(*lines))
         src_lines = list(src_lines)
         tgt_lines = list(tgt_lines)

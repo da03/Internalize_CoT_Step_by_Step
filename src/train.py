@@ -145,6 +145,7 @@ def main():
     parser.add_argument('--truncation', type=int, default=-1)
     parser.add_argument('--max_len_train', type=int, default=-1)
     parser.add_argument('--max_new_tokens', type=int, default=800)
+    parser.add_argument('--max_size', type=int, default=-1)
     parser.add_argument('--save_model', type=str, required=True)
     parser.add_argument('--from_pretrained', type=str, default=None)
     parser.add_argument('--remove_start_from', type=int, default=0)
@@ -185,6 +186,24 @@ def main():
     else:
         print (f'Loading from {args.from_pretrained}')
         model = ImplicitModel.from_pretrained(args.from_pretrained).to(device).to(ptdtype)
+    if 'gpt2' in args.model:
+        old_length = model.base_model.transformer.wpe.weight.shape[0]
+        if args.truncation > old_length and args.from_pretrained is None:
+            #import pdb; pdb.set_trace()
+            print ('EXPANDING POSITIONs')
+            new_wpe = torch.nn.Embedding(args.truncation, model.base_model.transformer.wpe.weight.shape[-1])
+            new_wpe.weight.data[:old_length] = model.base_model.transformer.wpe.weight
+            new_wpe.weight.data[old_length:] = model.base_model.transformer.wpe.weight[-1].view(1, -1).expand(args.truncation-old_length, -1)
+            model.base_model.transformer.wpe = new_wpe
+
+            for block in model.base_model.transformer.h:
+                block.attn.register_buffer(
+                    "bias",
+                    torch.tril(torch.ones((args.truncation, args.truncation), dtype=torch.bool)).view(
+                        1, 1, args.truncation, args.truncation
+                ),
+                persistent=False,
+            )
     model = model.to(device).to(ptdtype)
     tokenizer = model.tokenizer
 
@@ -197,7 +216,7 @@ def main():
 
     # Load data
     collate_fn = CoTDataCollator(tokenizer)
-    train_dataset = CoTDataset(tokenizer, args.train_path, args.truncation)
+    train_dataset = CoTDataset(tokenizer, args.train_path, args.truncation, max_size=args.max_size)
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, collate_fn=collate_fn, shuffle=True)
     val_dataset = CoTDataset(tokenizer, args.val_path, args.truncation)
     val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, collate_fn=collate_fn, shuffle=False)
@@ -291,7 +310,7 @@ def main():
                 labels = batch_ids(labels_tmp, -100, device, input_ids.dtype)
                 if not all_cot_removed_in_batch:
                     best_val_accuracy = float('-inf')
-            print (input_ids.shape)
+            #print (input_ids.shape)
             all_cot_removed_in_prev_batch = all_cot_removed_in_batch
             if args.max_len_train > 0 and input_ids.shape[-1] > args.max_len_train:
                 print ('skipped')
