@@ -7,7 +7,8 @@ import inspect
 import logging
 import random
 import torch
-
+import torch.nn as nn
+from torch.nn import CrossEntropyLoss
 from torch.utils.data import DataLoader
 from transformers import AdamW
 
@@ -36,7 +37,7 @@ def compute_lambda_distribution(removal_smoothing_lambda, truncate_length=100):
 
     
 @torch.no_grad()
-def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens, scheduled_to_remove, removal_side, removal_smoothing_lambda, lambda_distribution, keep_position=False, disable_random_removal_offset=False):
+def evaluate(mlp, pos_embeddings, dataloader, tokenizer, device, ctx, model, max_new_tokens, scheduled_to_remove, removal_side, removal_smoothing_lambda, lambda_distribution, keep_position=False, disable_random_removal_offset=False, layer=None):
     model.eval()
     total_instances = 0
     total_tokens = 0
@@ -88,40 +89,55 @@ def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens, schedule
         with ctx:
             if keep_position:
                 position_ids_all = position_ids_all[:, :input_ids_all.shape[-1]]
-            outputs = model.compute_loss(input_ids=input_ids_all, labels=labels, position_ids=position_ids_all)
+            #outputs = model.compute_loss(input_ids=input_ids_all, labels=labels, position_ids=position_ids_all)
+            with torch.no_grad():
+                outputs = model(input_ids=input_ids_all, output_hidden_states=True)
+                hidden_states = outputs.hidden_states[1 + layer] # bsz, seq_len, hidden_size
+            seq_len = hidden_states.shape[1]
+            bsz = hidden_states.shape[0]
+            position_ids = torch.arange(seq_len).view(1, -1).repeat(bsz, 1).to(device)
+            position_embs = pos_embeddings(position_ids) # bsz, seq_len, 768
+            hidden_states = hidden_states + position_embs
+            logits = mlp(hidden_states).view(bsz, seq_len, 54, -1) # bsz, seq_len, 54*13
+            labels_pred = logits.argmax(-1) # bsz, seq_len, 54
+            cot_targets = batch['cot_targets_all'].to(device) # bsz, 54
+            cot_targets = cot_targets.unsqueeze(1).repeat(1, seq_len, 1) # bsz, seq_len, 54
+            correct = labels_pred == cot_targets
+            loss_fct = CrossEntropyLoss()
+            loss = loss_fct(logits.contiguous().view(-1, 13), cot_targets.view(-1))
 
-        total_loss += outputs.total_loss.item()
-        total_correct_tokens += outputs.total_correct.item()
-        total_tokens += outputs.total_tokens
+        total_loss += loss.item() * cot_targets.view(-1).shape[0]
+        total_correct_tokens += correct.float().sum(0)
+        total_tokens += cot_targets.view(-1).shape[0]
         total_instances += batch_size
 
-        # Generate
-        stop_on_two_eos = True
-        if keep_position:
-            position_ids = position_ids_all[:, :input_ids.shape[-1]]
-        beam_output = model.generate(
-            input_ids=input_ids,
-            position_ids=position_ids,
-            max_new_tokens=max_new_tokens,
-            stop_on_two_eos=stop_on_two_eos,
-        )
+        ## Generate
+        #stop_on_two_eos = True
+        #if keep_position:
+        #    position_ids = position_ids_all[:, :input_ids.shape[-1]]
+        #beam_output = model.generate(
+        #    input_ids=input_ids,
+        #    position_ids=position_ids,
+        #    max_new_tokens=max_new_tokens,
+        #    stop_on_two_eos=stop_on_two_eos,
+        #)
 
-        # Evaluate
-        for i, (input_ids_all_i, beam_output_i) in enumerate(zip(input_ids_all, beam_output)):
-            sep_position = sep_positions[i].item()
-            tgt = input_ids_all_i[sep_position+1:]
-            tgt_text = tokenizer.decode(tgt, skip_special_tokens=True)
-            ans = extract_answer(tgt_text)
-            pred_text = tokenizer.decode(beam_output_i[0][sep_position+1:], skip_special_tokens=True)
-            pred_ans = extract_answer(pred_text)
-            if ans == pred_ans:
-                total_correct += 1
-            print (f'Input: {tokenizer.decode(input_ids_all_i[:sep_position], skip_special_tokens=True)}')
-            print (f'Target: {tgt_text}')
-            print (f'Predicted: {pred_text}')
-            print ('')
+        ## Evaluate
+        #for i, (input_ids_all_i, beam_output_i) in enumerate(zip(input_ids_all, beam_output)):
+        #    sep_position = sep_positions[i].item()
+        #    tgt = input_ids_all_i[sep_position+1:]
+        #    tgt_text = tokenizer.decode(tgt, skip_special_tokens=True)
+        #    ans = extract_answer(tgt_text)
+        #    pred_text = tokenizer.decode(beam_output_i[0][sep_position+1:], skip_special_tokens=True)
+        #    pred_ans = extract_answer(pred_text)
+        #    if ans == pred_ans:
+        #        total_correct += 1
+        #    print (f'Input: {tokenizer.decode(input_ids_all_i[:sep_position], skip_special_tokens=True)}')
+        #    print (f'Target: {tgt_text}')
+        #    print (f'Predicted: {pred_text}')
+        #    print ('')
     accuracy = total_correct / total_instances
-    token_accuracy = total_correct_tokens / total_tokens
+    token_accuracy = total_correct_tokens / total_instances
     loss = total_loss / total_tokens
     ppl = math.exp(loss)
     return accuracy, token_accuracy, ppl
@@ -150,6 +166,7 @@ def main():
     parser.add_argument('--from_pretrained', type=str, default=None)
     parser.add_argument('--remove_start_from', type=int, default=0)
     parser.add_argument('--seed', type=int, default=1234)
+    parser.add_argument('--layer', type=int, default=6)
     parser.add_argument('--max_grad_norm', type=float, default=1.0)
     parser.add_argument('--bf16', action='store_true')
     parser.set_defaults(bf16=False)
@@ -205,6 +222,7 @@ def main():
                 persistent=False,
             )
     model = model.to(device).to(ptdtype)
+    model.eval()
     tokenizer = model.tokenizer
 
     if args.reinitialize_weights:
@@ -225,7 +243,10 @@ def main():
         test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, collate_fn=collate_fn, shuffle=False)
 
     # Create Optimizer
-    trainable_params = list(model.parameters())
+    #import pdb; pdb.set_trace()
+    mlp = nn.Sequential(nn.Linear(768, 768*16), nn.ReLU(), nn.Linear(768*16, 54*13)).to(device)
+    pos_embeddings = nn.Embedding(1024, 768).to(device)
+    trainable_params = list(mlp.parameters()) + list(pos_embeddings.parameters())
     use_fused = 'fused' in inspect.signature(torch.optim.AdamW).parameters
     extra_args = dict(fused=True) if use_fused else dict()
     optimizer = torch.optim.AdamW(trainable_params, lr=args.lr, **extra_args)
@@ -233,6 +254,7 @@ def main():
     # Train
     step = 0
     scheduled_to_remove = 0
+    args.remove_start_from = 10000
     if args.remove_start_from > 0:
         print (f'the number of removed CoT tokens starts from {args.remove_start_from}')
         scheduled_to_remove = args.remove_start_from
@@ -251,7 +273,7 @@ def main():
         if scheduled_to_remove >= args.remove_all_when_remove_beyond:
             scheduled_to_remove = float('inf') # remove all
         print(f"Epoch {epoch}. Scheduled to remove: {scheduled_to_remove}")
-        model.train()
+        #model.train()
         for batch in tqdm.tqdm(train_dataloader):
             prev_scheduled_to_remove = scheduled_to_remove
             if remove_step_counter == steps_per_removed_token or steps_per_removed_token == 0:
@@ -319,29 +341,57 @@ def main():
             with ctx:
                 if args.keep_position:
                     position_ids = position_ids[:, :input_ids.shape[-1]]
-                outputs = model.compute_loss(input_ids=input_ids, labels=labels, position_ids=position_ids)
-            loss = outputs.loss
+                #outputs = model.compute_loss(input_ids=input_ids, labels=labels, position_ids=position_ids)
+                #import pdb; pdb.set_trace()
+                with torch.no_grad():
+                    outputs = model(input_ids=input_ids, output_hidden_states=True)
+                    hidden_states = outputs.hidden_states[1 + args.layer] # bsz, seq_len, hidden_size
+                seq_len = hidden_states.shape[1]
+                bsz = hidden_states.shape[0]
+                position_ids = torch.arange(seq_len).view(1, -1).repeat(bsz, 1).to(device)
+                position_embs = pos_embeddings(position_ids) # bsz, seq_len, 768
+                hidden_states = hidden_states + position_embs
+            logits = mlp(hidden_states).view(bsz, seq_len, 54, -1) # bsz, seq_len, 54*13
+            labels_pred = logits.argmax(-1) # bsz, seq_len, 54
+            cot_targets = batch['cot_targets_all'].to(device) # bsz, 54
+            #import pdb; pdb.set_trace()
+            cot_targets = cot_targets.unsqueeze(1).repeat(1, seq_len, 1) # bsz, seq_len, 54
+            correct = labels_pred == cot_targets
+            token_accuracy = correct.float().mean(0)
+            loss_fct = CrossEntropyLoss()
+            loss = loss_fct(logits.contiguous().view(-1, 13), cot_targets.view(-1))
             loss.div(args.accumulate).backward()
             if step % args.accumulate == 0:
                 torch.nn.utils.clip_grad_norm_(trainable_params, args.max_grad_norm)
                 optimizer.step()
                 optimizer.zero_grad(set_to_none=True)
+            def print_array(a):
+                s = ''
+                for row in a:
+                    for col in row:
+                        s += f'{col:.2f} '
+                    s = s.strip() + '\n'
+                return s.strip()
 
             if step % 100 == 0:
-                token_accuracy = outputs.token_accuracy.item()
+                #token_accuracy = outputs.token_accuracy.item()
                 ppl = loss.exp().item()
-                print (f"Step: {step}. PPL: {ppl}. Token Accuracy: {token_accuracy}")
+                #print (f"Step: {step}. PPL: {ppl}. Token Accuracy: \n{print_array(token_accuracy)}")
+                print (f"Step: {step}. PPL: {ppl}.")
             step += 1
         print (f'Scheduled to remove: {scheduled_to_remove}')
-        accuracy, token_accuracy, ppl = evaluate(val_dataloader, tokenizer, device, ctx, model, args.max_new_tokens, scheduled_to_remove, args.removal_side, args.removal_smoothing_lambda, lambda_distribution, keep_position=args.keep_position, disable_random_removal_offset=True)
-        print (f'Disable Offset Val. PPL: {ppl}; Accuracy: {accuracy}; Token Accuracy: {token_accuracy}.')
-        if accuracy > best_val_accuracy:
-            print ('***best so far or removed more CoT tokens***')
-            best_val_accuracy = accuracy
-            if args.test_path:
-                accuracy, token_accuracy, ppl = evaluate(test_dataloader, tokenizer, device, ctx, model, args.max_new_tokens, scheduled_to_remove, args.removal_side, args.removal_smoothing_lambda, lambda_distribution, keep_position=args.keep_position, disable_random_removal_offset=True)
-                print (f'Test. PPL: {ppl}; Accuracy: {accuracy}; Token Accuracy: {token_accuracy}.')
-        model.save_pretrained(os.path.join(args.save_model, f'checkpoint_{epoch}'))
+        accuracy, token_accuracy, ppl = evaluate(mlp, pos_embeddings, val_dataloader, tokenizer, device, ctx, model, args.max_new_tokens, scheduled_to_remove, args.removal_side, args.removal_smoothing_lambda, lambda_distribution, keep_position=args.keep_position, disable_random_removal_offset=True, layer=args.layer)
+        print (f'Disable Offset Val. PPL: {ppl}; Token Accuracy: \n>>>>>>>>>>\n{print_array(token_accuracy)}\n<<<<<<<<<<.\n')
+        #if accuracy > best_val_accuracy:
+        #    print ('***best so far or removed more CoT tokens***')
+        #    best_val_accuracy = accuracy
+        #    if args.test_path:
+        #        accuracy, token_accuracy, ppl = evaluate(test_dataloader, tokenizer, device, ctx, model, args.max_new_tokens, scheduled_to_remove, args.removal_side, args.removal_smoothing_lambda, lambda_distribution, keep_position=args.keep_position, disable_random_removal_offset=True)
+        #        print (f'Test. PPL: {ppl}; Accuracy: {accuracy}; Token Accuracy: {token_accuracy}.')
+        layer = args.layer
+        os.makedirs(os.path.join(args.save_model,f'layer_{layer}', f'checkpoint_{epoch}'), exist_ok=True)
+        torch.save(mlp.state_dict(), os.path.join(args.save_model,f'layer_{layer}', f'checkpoint_{epoch}/mlp.pt'))
+        torch.save(pos_embeddings.state_dict(), os.path.join(args.save_model,f'layer_{layer}', f'checkpoint_{epoch}/pos.pt'))
 
 if __name__ == "__main__":
     main()

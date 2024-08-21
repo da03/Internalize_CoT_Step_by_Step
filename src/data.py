@@ -49,10 +49,31 @@ class CoTDataset(Dataset):
         edited_sents_all = []
         #edited_sents_nocot = []
         self.examples_all = []
+        mapping = {
+                '0': 0,
+                '1': 1,
+                '2': 2,
+                '3': 3,
+                '4': 4,
+                '5': 5,
+                '6': 6,
+                '7': 7,
+                '8': 8,
+                '9': 9,
+                '(': 10,
+                ')': 11,
+                '+': 12,
+        }
+        self.cot_targets_all = []
         for src, tgt in zip(src_lines, tgt_lines):
             #import pdb; pdb.set_trace()
             ans = extract_answer(tgt)
             cot = extract_cot(tgt)
+            cot_tokens = cot.strip().split()
+            ans_tokens = ans.replace('####', '').strip().split()
+            #import pdb; pdb.set_trace()
+            cot_tokens = [mapping[tok] for tok in cot_tokens + ans_tokens]
+            self.cot_targets_all.append(cot_tokens)
             #sent = ' {} {} '.format(src, eos_tok) + cot + ' {}'.format(eos_tok)
             #edited_sents_cot.append(sent)
             #sent = ' {} {} '.format(src, eos_tok)
@@ -84,6 +105,7 @@ class CoTDataset(Dataset):
         return (
                 torch.tensor(input_ids, dtype=torch.long),
                 torch.tensor(labels, dtype=torch.long),
+                torch.tensor(self.cot_targets_all[i], dtype=torch.long),
                 )
 @dataclass
 class CoTDataCollator:
@@ -97,7 +119,7 @@ class CoTDataCollator:
 
     def __call__(self, examples):
         #import pdb; pdb.set_trace()
-        input_ids_all, labels_all = zip(*examples)
+        input_ids_all, labels_all, cot_targets_all = zip(*examples)
         #input_ids_cot = self._tensorize_batch(input_ids_cot)
         #input_ids_cot[input_ids_cot.lt(0)] = self.tokenizer.eos_token_id
         #input_ids_only = self._tensorize_batch(input_ids_only)
@@ -108,10 +130,11 @@ class CoTDataCollator:
         #input_ids_nocot[input_ids_nocot.lt(0)] = self.tokenizer.eos_token_id
         #labels_cot = self._tensorize_batch(labels_cot)
         labels_all = self._tensorize_batch(labels_all)
+        cot_targets_all = self._tensorize_batch(cot_targets_all)
         #labels_cot_shift = self._tensorize_batch(labels_cot_shift)
         #labels_nocot = self._tensorize_batch(labels_nocot)
         #return {"input_ids_cot": input_ids_cot, "input_ids_nocot": input_ids_nocot, "labels_cot": labels_cot, "labels_cot_shift": labels_cot_shift, "labels_nocot": labels_nocot, 'input_ids_only': input_ids_only, 'input_ids_all': input_ids_all, 'labels_all': labels_all}
-        return {'input_ids_all': input_ids_all, 'labels_all': labels_all}
+        return {'input_ids_all': input_ids_all, 'labels_all': labels_all, 'cot_targets_all': cot_targets_all}
 
     def _tensorize_batch(self, examples):
         # In order to accept both lists of lists and lists of Tensors

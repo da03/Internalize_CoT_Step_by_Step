@@ -20,11 +20,11 @@ class ImplicitModel(nn.Module):
             self.base_model.apply(self.base_model._init_weights)
         self.tokenizer = AutoTokenizer.from_pretrained(config.tokenizer_name)
 
-    def forward(self, input_ids, position_ids=None, output_attentions=False):
+    def forward(self, input_ids, position_ids=None, output_attentions=False, output_hidden_states=False):
         if position_ids is not None:
-            outputs = self.base_model.forward(input_ids=input_ids, output_attentions=output_attentions, position_ids=position_ids)
+            outputs = self.base_model.forward(input_ids=input_ids, output_attentions=output_attentions, position_ids=position_ids, output_hidden_states=output_hidden_states)
         else:
-            outputs = self.base_model.forward(input_ids=input_ids, output_attentions=output_attentions)
+            outputs = self.base_model.forward(input_ids=input_ids, output_attentions=output_attentions, output_hidden_states=output_hidden_states)
         return outputs
 
     def compute_loss(self, input_ids, labels, position_ids=None, output_attentions=False):
