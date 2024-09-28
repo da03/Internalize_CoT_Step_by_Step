@@ -107,18 +107,26 @@ def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens, schedule
         )
 
         # Evaluate
+        second_sep_positions = get_sep_position(input_ids_all, tokenizer.eos_token_id, skip=1)
         for i, (input_ids_all_i, beam_output_i) in enumerate(zip(input_ids_all, beam_output)):
             sep_position = sep_positions[i].item()
             tgt = input_ids_all_i[sep_position+1:]
             tgt_text = tokenizer.decode(tgt, skip_special_tokens=True)
-            ans = extract_answer(tgt_text)
             pred_text = tokenizer.decode(beam_output_i[0][sep_position+1:], skip_special_tokens=True)
-            pred_ans = extract_answer(pred_text)
+            second_sep_position = second_sep_positions[i]
+            #import pdb; pdb.set_trace()
+            ans = tokenizer.decode(input_ids_all_i[second_sep_position+1:], skip_special_tokens=True).strip() #extract_answer(tgt_text)
+            try:
+                beam_second_sep_positions = get_sep_position(beam_output_i, tokenizer.eos_token_id, skip=1)
+            except Exception as e:
+                beam_second_sep_positions = [sep_position]
+            pred_ans = tokenizer.decode(beam_output_i[0][beam_second_sep_positions[0]+1:], skip_special_tokens=True).strip() #extract_answer(tgt_text)
             if ans == pred_ans:
                 total_correct += 1
             print (f'Input: {tokenizer.decode(input_ids_all_i[:sep_position], skip_special_tokens=True)}')
             print (f'Target: {tgt_text}')
             print (f'Predicted: {pred_text}')
+            print (f'gt: {ans} vs p {pred_ans}')
             print ('')
     accuracy = total_correct / total_instances
     token_accuracy = total_correct_tokens / total_tokens
@@ -220,6 +228,7 @@ def main():
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, collate_fn=collate_fn, shuffle=True)
     val_dataset = CoTDataset(tokenizer, args.val_path, args.truncation)
     val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, collate_fn=collate_fn, shuffle=False)
+    #val_dataloader = DataLoader(val_dataset, batch_size=1, collate_fn=collate_fn, shuffle=False)
     if args.test_path:
         test_dataset = CoTDataset(tokenizer, args.test_path, args.truncation)
         test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, collate_fn=collate_fn, shuffle=False)
@@ -331,6 +340,7 @@ def main():
                 token_accuracy = outputs.token_accuracy.item()
                 ppl = loss.exp().item()
                 print (f"Step: {step}. PPL: {ppl}. Token Accuracy: {token_accuracy}")
+                sys.stdout.flush()
             step += 1
         print (f'Scheduled to remove: {scheduled_to_remove}')
         accuracy, token_accuracy, ppl = evaluate(val_dataloader, tokenizer, device, ctx, model, args.max_new_tokens, scheduled_to_remove, args.removal_side, args.removal_smoothing_lambda, lambda_distribution, keep_position=args.keep_position, disable_random_removal_offset=True)
@@ -341,7 +351,8 @@ def main():
             if args.test_path:
                 accuracy, token_accuracy, ppl = evaluate(test_dataloader, tokenizer, device, ctx, model, args.max_new_tokens, scheduled_to_remove, args.removal_side, args.removal_smoothing_lambda, lambda_distribution, keep_position=args.keep_position, disable_random_removal_offset=True)
                 print (f'Test. PPL: {ppl}; Accuracy: {accuracy}; Token Accuracy: {token_accuracy}.')
-        model.save_pretrained(os.path.join(args.save_model, f'checkpoint_{epoch}'))
+                sys.stdout.flush()
+        #model.save_pretrained(os.path.join(args.save_model, f'checkpoint_{epoch}'))
 
 if __name__ == "__main__":
     main()

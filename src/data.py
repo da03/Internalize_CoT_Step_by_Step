@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass
 import os
 import copy
@@ -6,22 +7,22 @@ from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 
 def extract_answer(text):
-    split_pattern = '####'
+    split_pattern = '########'
     if split_pattern not in text:
         return text.strip().replace(',', '')
     else:
-        _, ans = text.strip().split('####', 1)
+        _, ans = text.strip().split('########', 1)
         ans = '####' + ans
         ans = ans.strip().replace(',', '')
         return ans
 
 def extract_cot(text):
-    split_pattern = '####'
+    split_pattern = '########'
     if split_pattern not in text:
         #import pdb; pdb.set_trace()
         return None
     else:
-        cot, _ = text.strip().split('####', 1)
+        cot, _ = text.strip().split('########', 1)
         cot = cot.strip()
         return cot
 
@@ -35,29 +36,36 @@ class CoTDataset(Dataset):
         with open(file_path, encoding="utf-8") as f:
             #lines = [line.split('||') for line in f.read().splitlines() if (len(line) > 0 and not line.isspace()
             #                                                                 and len(line.split('||')) ==2 )]
-            lines = [line.strip().split('||') for line in f.readlines() if (len(line.strip()) > 0 and not line.strip().isspace()
-                                                                             and len(line.strip().split('||')) ==2 )]
+            lines = []
+            for line in f:
+                d = json.loads(line.strip())
+                lines.append((d['problem'], d['cot'], d['answer']))
+
+            #lines = [line.strip().split('||||||||') for line in f.readlines() if (len(line.strip()) > 0 and not line.strip().isspace()
+            #                                                                 and len(line.strip().split('||||||||')) ==2 )]
         if max_size > 0:
             print (f'truncated to {max_size}')
             lines = lines[:max_size]
-        src_lines, tgt_lines = list(zip(*lines))
+        src_lines, cot_lines, ans_lines = list(zip(*lines))
         src_lines = list(src_lines)
-        tgt_lines = list(tgt_lines)
+        cot_lines = list(cot_lines)
+        ans_lines = list(ans_lines)
 
         #edited_sents_cot = []
         #edited_sents_only = []
         edited_sents_all = []
         #edited_sents_nocot = []
         self.examples_all = []
-        for src, tgt in zip(src_lines, tgt_lines):
+        for src, cot, ans in zip(src_lines, cot_lines, ans_lines):
             #import pdb; pdb.set_trace()
-            ans = extract_answer(tgt)
-            cot = extract_cot(tgt)
+            #ans = extract_answer(tgt)
+            #cot = extract_cot(tgt)
             #sent = ' {} {} '.format(src, eos_tok) + cot + ' {}'.format(eos_tok)
             #edited_sents_cot.append(sent)
             #sent = ' {} {} '.format(src, eos_tok)
             #edited_sents_only.append(sent)
-            sent = ' {} {} '.format(src, eos_tok) + cot + ' {} '.format(eos_tok) + ans + ' {}'.format(eos_tok)
+            #import pdb; pdb.set_trace()
+            sent = f'<s>[INST] {src}[/INST] {eos_tok} {cot} {eos_tok} {ans} {eos_tok}'
             #edited_sents_all.append(sent)
             #sent = ' {} {} '.format(src, eos_tok) + ans + ' {}'.format(eos_tok)
             #edited_sents_nocot.append(sent)
