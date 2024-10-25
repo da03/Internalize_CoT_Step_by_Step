@@ -151,7 +151,8 @@ class CoTDataCollator:
         return {
             'input_ids': batch_combined_ids,
             'attention_mask': attention_mask,
-            'labels': batch_labels
+            'labels': batch_labels,
+            'input_len': input_len,
         }
 
 
@@ -214,7 +215,7 @@ class TransformerBlock(nn.Module):
         return x
 
 class GPT2CustomModel(nn.Module):
-    def __init__(self, vocab_size, max_seq_len, n_layers, n_heads, d_model, d_ff, dropout=0.1):
+    def __init__(self, vocab_size, max_seq_len, n_layers, n_heads, d_model, d_ff, dropout=0.1, tol=1e-5):
         super(GPT2CustomModel, self).__init__()
         self.token_emb = nn.Embedding(vocab_size, d_model)
         self.pos_emb = nn.Embedding(max_seq_len, d_model)
@@ -226,19 +227,90 @@ class GPT2CustomModel(nn.Module):
         self.ln_f = nn.LayerNorm(d_model, eps=1e-5)
         self.head = nn.Linear(d_model, vocab_size, bias=False)
 
-    def forward(self, input_ids, attention_mask=None):
+        self.tol = tol
+
+    def forward(self, input_ids, attention_mask=None,num_iter=5):
+        """
+        Inference mode, no loss calculation, returns only logits.
+        """
         batch_size, seq_len = input_ids.size()
         positions = torch.arange(0, seq_len, dtype=torch.long, device=input_ids.device).unsqueeze(0).expand(batch_size, seq_len)
 
         x = self.token_emb(input_ids) + self.pos_emb(positions)
         x = self.dropout(x)
 
-        for block in self.blocks:
-            x = block(x, attn_mask=attention_mask)
+        # Inference mode: Run until equilibrium
+        for iter in range(num_iter):  # Maximum 5 iterations as in your initial request
+            x_prev = x.clone()  # Save the previous state of x
+
+            # Pass through the transformer blocks
+            for block in self.blocks:
+                x = block(x, attn_mask=attention_mask)
+
+            # Check if x has changed significantly (early stopping condition)
+            change = torch.abs(x - x_prev).mean().item()  # Measure the mean change
+            if change < self.tol:
+                break  # Stop if the change is smaller than the tolerance
 
         x = self.ln_f(x)
         logits = self.head(x)
         return logits
+
+    def compute_loss(self, input_ids, attention_mask=None, labels=None, criterion=None, chunk_size=5, max_chunks=5, predict_start_idx=0):
+        """
+        Computes the loss during training with fixed-size chunks.
+        Starts predicting from `predict_start_idx` and chunks the remaining tokens.
+        
+        Parameters:
+        - chunk_size: Number of tokens per chunk.
+        - max_chunks: Maximum number of chunks to process.
+        - predict_start_idx: Index in the sequence where prediction starts (input tokens before this index are ignored).
+        """
+        batch_size, seq_len = input_ids.size()
+        positions = torch.arange(0, seq_len, dtype=torch.long, device=input_ids.device).unsqueeze(0).expand(batch_size, seq_len)
+
+        x = self.token_emb(input_ids) + self.pos_emb(positions)
+        x = self.dropout(x)
+
+        total_loss = 0.0  # Accumulate loss here
+
+        # Calculate number of chunks starting from the predict_start_idx
+        num_chunks = (seq_len - predict_start_idx + chunk_size - 1) // chunk_size  # Calculate number of chunks
+        num_chunks = min(num_chunks, max_chunks)  # Ensure we don't exceed `max_chunks`
+
+        for chunk_idx in range(num_chunks):
+            # Define the start and end of the current chunk, starting from `predict_start_idx`
+            start_idx = predict_start_idx + chunk_idx * chunk_size
+            end_idx = min(predict_start_idx + (chunk_idx + 1) * chunk_size, seq_len)
+
+            if chunk_idx + 1 == num_chunks:
+                x_prev = x.clone()  # Save the previous state of x before applying the transformer blocks
+
+            # Apply the model block-wise on this chunk
+            for block in self.blocks:
+                x = block(x, attn_mask=attention_mask)
+
+            if chunk_idx + 1 == num_chunks:
+                total_loss += torch.nn.functional.mse_loss(x, x_prev)
+
+            # Compute logits for the current chunk
+            logits = self.head(self.ln_f(x))
+
+            # Compare only the tokens in the current chunk
+            logits_chunk = logits[:, predict_start_idx:end_idx, :]  # (batch_size, chunk_size, vocab_size)
+            target_chunk = labels[:, predict_start_idx:end_idx]      # (batch_size, chunk_size)
+
+            # print(logits_chunk.shape, logits.size(-1), target_chunk.shape)
+            # Flatten logits and targets for loss computation
+            logits_flat = logits_chunk.reshape(-1, logits.size(-1))  # (batch_size * chunk_size, vocab_size)
+            target_flat = target_chunk.reshape(-1)                   # (batch_size * chunk_size)
+
+            # Calculate the loss for this chunk
+            chunk_loss = criterion(logits_flat, target_flat)
+            total_loss += chunk_loss
+
+        return logits, total_loss
+
 
 def generate_sequence(model, tokenizer, input_ids, max_target_length=50, device='cpu'):
     model.eval()
@@ -259,7 +331,7 @@ def generate_sequence(model, tokenizer, input_ids, max_target_length=50, device=
 
     # Run the model to get logits
     with torch.no_grad():
-        logits = model(input_ids_padded, attention_mask=attention_mask)  # (1, total_len, vocab_size)
+        logits = model(input_ids_padded, attention_mask=attention_mask, num_iter=10)  # (1, total_len, vocab_size)
 
     # Get logits for the target portion (starting after input_len)
     target_logits = logits[:, input_len:, :]  # (1, max_target_length, vocab_size)
@@ -299,10 +371,10 @@ def main():
     parser.add_argument('--truncation', type=int, default=-1, help='Sequence truncation length')
 
     # Model configuration parameters
-    parser.add_argument('--d_model', type=int, default=128, help='Model hidden size')
-    parser.add_argument('--n_layers', type=int, default=12, help='Number of hidden layers')
-    parser.add_argument('--n_heads', type=int, default=4, help='Number of attention heads')
-    parser.add_argument('--d_ff', type=int, default=128*4, help='Feedforward network hidden size')
+    parser.add_argument('--d_model', type=int, default=64, help='Model hidden size')
+    parser.add_argument('--n_layers', type=int, default=2, help='Number of hidden layers')
+    parser.add_argument('--n_heads', type=int, default=2, help='Number of attention heads')
+    parser.add_argument('--d_ff', type=int, default=64*4, help='Feedforward network hidden size')
     parser.add_argument('--dropout', type=float, default=0.1, help='Dropout probability')
     args = parser.parse_args()
 
@@ -350,28 +422,24 @@ def main():
         epoch_loss = 0
         total_correct = 0
         total_count = 0
-        
+
         for batch in tqdm(train_loader, desc='Training'):
             input_ids = batch['input_ids'].to(device)  # (batch_size, seq_len)
             labels = batch['labels'].to(device)  # (batch_size, seq_len)
             attention_mask = batch['attention_mask'].to(device)  # (batch_size, seq_len, seq_len)
 
             optimizer.zero_grad()
-            logits = model(input_ids, attention_mask=attention_mask)  # (batch_size, seq_len, vocab_size)
+            # Get logits and loss from the model
+            logits, loss = model.compute_loss(input_ids, attention_mask=attention_mask, labels=labels, criterion=criterion,
+                                chunk_size=20,max_chunks=10,predict_start_idx=batch['input_len'])
 
-            # Reshape for loss computation
-            logits = logits.view(-1, logits.size(-1))  # (batch_size * seq_len, vocab_size)
-            labels = labels.view(-1)  # (batch_size * seq_len)
-
-            # Calculate loss
-            loss = criterion(logits, labels)
             loss.backward()
             optimizer.step()
 
             epoch_loss += loss.item()
 
             # Calculate accuracy
-            predictions = torch.argmax(logits, dim=-1)  # (batch_size * seq_len)
+            predictions = torch.argmax(logits, dim=-1)  # (batch_size, seq_len)
             mask = labels != -100  # Ignore padding tokens (-100 is ignored in CrossEntropyLoss)
             correct = (predictions == labels) & mask  # Only count non-padding tokens
             total_correct += correct.sum().item()
@@ -386,14 +454,14 @@ def main():
         val_loss = 0
         val_correct = 0
         val_total = 0
-        
+
         with torch.no_grad():
             for batch in tqdm(val_loader, desc='Validation'):
                 input_ids = batch['input_ids'].to(device)  # (batch_size, seq_len)
                 labels = batch['labels'].to(device)  # (batch_size, seq_len)
                 attention_mask = batch['attention_mask'].to(device)  # (batch_size, seq_len, seq_len)
 
-                logits = model(input_ids, attention_mask=attention_mask)  # (batch_size, seq_len, vocab_size)
+                logits = model(input_ids, attention_mask=attention_mask,num_iter=10)  # (batch_size, seq_len, vocab_size)
 
                 # Reshape for loss computation
                 logits = logits.view(-1, logits.size(-1))  # (batch_size * seq_len, vocab_size)
@@ -413,6 +481,7 @@ def main():
         avg_val_loss = val_loss / len(val_loader)
         val_accuracy = val_correct / val_total if val_total > 0 else 0
         print(f'Average Validation Loss: {avg_val_loss:.4f}, Validation Accuracy: {val_accuracy:.4f}')
+
 
         # Generate examples after each epoch
         print(f'\nExample Generations after Epoch {epoch + 1}:')
