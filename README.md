@@ -1,5 +1,14 @@
 # Internalize CoT Step by Step
 
+```
+4 8 7 7 1 8 4 2 8 1 1 * 1 2 1 5 1 3 4 3 6 6 2||4 8 7 7 1 8 4 2 8 1 1 0 + 0 8 6 5 5 3 6 9 4 6 3 2 0 ( 4 6 4 3 7 1 1 2 3 8 4 2 0 ) + 0 0 4 8 7 7 1 8 4 2 8 1 1 0 ( 4 6 8 1 5 9 2 0 8 0 3 4 1 0 ) + 0 0 0 0 2 9 8 8 0 4 2 1 9 5 0 ( 4 6 8 1 7 8 1 9 8 4 5 5 0 6 0 ) + 0 0 0 0 4 8 7 7 1 8 4 2 8 1 1 0 ( 4 6 8 1 1 7 9 6 0 3 0 8 8 7 1 0 ) + 0 0 0 0 0 2 5 3 3 5 4 4 7 4 5 3 0 ( 4 6 8 1 1 9 4 0 4 8 4 2 6 2 7 3 0 ) + 0 0 0 0 0 0 6 3 1 1 7 2 9 9 2 7 4 0 ( 4 6 8 1 1 9 0 4 5 9 1 5 5 2 0 1 5 0 ) + 0 0 0 0 0 0 0 2 5 3 3 5 4 4 7 4 5 3 0 ( 4 6 8 1 1 9 0 6 0 3 5 0 0 7 7 5 0 4 0 ) + 0 0 0 0 0 0 0 0 4 0 7 6 0 9 8 4 9 0 7 0 ( 4 6 8 1 1 9 0 6 4 3 2 7 0 6 6 0 0 5 7 0 ) + 0 0 0 0 0 0 0 0 0 4 0 7 6 0 9 8 4 9 0 7 0 ( 4 6 8 1 1 9 0 6 4 7 2 4 7 6 5 9 4 4 8 7 0 ) + 0 0 0 0 0 0 0 0 0 0 8 6 5 5 3 6 9 4 6 3 2 0 #### 4 6 8 1 1 9 0 6 4 7 0 1 3 2 9 5 4 9 4 1 3 0
+
+7 6 9 2 * 1 6 3 6||7 6 9 2 0 + 0 2 0 8 7 1 ( 7 8 9 0 8 1 ) + 0 0 1 0 9 8 0 ( 7 8 0 1 7 0 1 ) + 0 0 0 2 0 8 7 1 #### 7 8 0 3 7 8 8 1
+
+
+CUDA_VISIBLE_DEVICES=2 python src/train_idl.py --train_path data/11_by_11_mult/train.txt --val_path data/11_by_11_mult/valid.txt --epochs 20  --batch_size 16 --d_model 128 --d_ff 512 --n_layers 1 --n_heads 1 --learning_rate 3e-4 --max_length 1024 --chunk_size 80 --max_chunk 12 --output_dir models/11_by_11_mult/ --max_size -1
+```
+
 This repository contains code to reproduce the results from our paper [From Explicit CoT to Implicit CoT: Learning to Internalize CoT Step by Step](https://arxiv.org/pdf/2405.14838).
 
 ## Online Demos

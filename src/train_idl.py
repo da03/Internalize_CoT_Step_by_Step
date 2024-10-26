@@ -312,7 +312,7 @@ class GPT2CustomModel(nn.Module):
         return logits, total_loss
 
 
-def generate_sequence(model, tokenizer, input_ids, max_target_length=50, device='cpu'):
+def generate_sequence(model, tokenizer, input_ids, max_target_length=50, max_chunk=12, device='cpu'):
     model.eval()
 
     # Convert the input_ids to tensor if it's not already a tensor
@@ -331,7 +331,7 @@ def generate_sequence(model, tokenizer, input_ids, max_target_length=50, device=
 
     # Run the model to get logits
     with torch.no_grad():
-        logits = model(input_ids_padded, attention_mask=attention_mask, num_iter=10)  # (1, total_len, vocab_size)
+        logits = model(input_ids_padded, attention_mask=attention_mask, num_iter=max_chunk)  # (1, total_len, vocab_size)
 
     # Get logits for the target portion (starting after input_len)
     target_logits = logits[:, input_len:, :]  # (1, max_target_length, vocab_size)
@@ -366,7 +366,7 @@ def main():
     parser.add_argument('--max_length', type=int, default=256, help='Maximum sequence length')
     parser.add_argument('--batch_size', type=int, default=256, help='Batch size')
     parser.add_argument('--epochs', type=int, default=3, help='Number of epochs')
-    parser.add_argument('--learning_rate', type=float, default=5e-5, help='Learning rate')
+    parser.add_argument('--learning_rate', type=float, default=3e-4, help='Learning rate')
     parser.add_argument('--max_size', type=int, default=-1, help='Maximum size of the dataset to use')
     parser.add_argument('--truncation', type=int, default=-1, help='Sequence truncation length')
 
@@ -376,6 +376,9 @@ def main():
     parser.add_argument('--n_heads', type=int, default=2, help='Number of attention heads')
     parser.add_argument('--d_ff', type=int, default=64*4, help='Feedforward network hidden size')
     parser.add_argument('--dropout', type=float, default=0.1, help='Dropout probability')
+    parser.add_argument('--chunk_size', type=int, default=12, help='Number of tokens to predict in one iteration of fixed-point')
+    parser.add_argument('--max_chunk', type=int, default=12, help='Number of iterations of fixed-point')
+
     args = parser.parse_args()
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -431,7 +434,7 @@ def main():
             optimizer.zero_grad()
             # Get logits and loss from the model
             logits, loss = model.compute_loss(input_ids, attention_mask=attention_mask, labels=labels, criterion=criterion,
-                                chunk_size=20,max_chunks=10,predict_start_idx=batch['input_len'])
+                                chunk_size=args.max_chunk,max_chunks=args.chunk_size,predict_start_idx=batch['input_len'])
 
             loss.backward()
             optimizer.step()
@@ -461,7 +464,7 @@ def main():
                 labels = batch['labels'].to(device)  # (batch_size, seq_len)
                 attention_mask = batch['attention_mask'].to(device)  # (batch_size, seq_len, seq_len)
 
-                logits = model(input_ids, attention_mask=attention_mask,num_iter=10)  # (batch_size, seq_len, vocab_size)
+                logits = model(input_ids, attention_mask=attention_mask,num_iter=args.max_chunk)  # (batch_size, seq_len, vocab_size)
 
                 # Reshape for loss computation
                 logits = logits.view(-1, logits.size(-1))  # (batch_size * seq_len, vocab_size)
@@ -491,7 +494,7 @@ def main():
             input_text = tokenizer.decode(input_tokens, skip_special_tokens=True)
 
             # Generate the prediction
-            generated_text = generate_sequence(model, tokenizer, input_tokens, max_target_length=128, device=device)
+            generated_text = generate_sequence(model, tokenizer, input_tokens, max_target_length=len(example['target_ids']), max_chunk=args.max_chunk, device=device)
 
             # Extract the target answer (what the model should generate)
             target_tokens = example['target_ids']  # Get the target tokens directly from the example
