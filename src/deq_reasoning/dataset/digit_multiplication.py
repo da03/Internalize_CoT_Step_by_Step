@@ -1,3 +1,5 @@
+import logging
+
 from dataclasses import dataclass
 import os
 
@@ -5,6 +7,7 @@ import torch
 
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset, DataLoader
+logger = logging.getLogger(__name__)
 
 vocab = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ' ', '*', '+', '(', ')', '#', '<PAD>', '<EOS>']
 char2id = {char: idx for idx, char in enumerate(vocab)}
@@ -70,14 +73,14 @@ def extract_cot(text):
 class CoTDataset(Dataset):
     def __init__(self, tokenizer, file_path, max_length=-1, max_size=-1, with_cot=False):
         assert os.path.isfile(file_path), f"Input file path {file_path} not found"
-        print(f'Creating features from dataset file at {file_path}')
+        logger.info(f'Creating features from dataset file at {file_path}')
         eos_tok = tokenizer.eos_token
 
         with open(file_path, encoding="utf-8") as f:
             lines = [line.strip().split('||') for line in f.readlines() if (len(line.strip()) > 0 and not line.strip().isspace()
                                                                              and len(line.strip().split('||')) == 2)]
         if max_size > 0:
-            print(f'Truncated to {max_size}')
+            logger.info(f'Dataset size truncated to {max_size}')
             lines = lines[:max_size]
         src_lines, tgt_lines = list(zip(*lines))
         src_lines = list(src_lines)
@@ -111,7 +114,7 @@ class CoTDataset(Dataset):
             })
 
             if len(self.examples) % 10000 == 0:
-                print(f'Processed {len(self.examples)} examples')
+                logger.info(f'Processed {len(self.examples)} examples')
 
     def __len__(self):
         return len(self.examples)

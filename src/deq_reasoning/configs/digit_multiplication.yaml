@@ -5,29 +5,25 @@ defaults:
   - _self_
   # - optional override:
 
-model: deq
 
 device: cuda
-
 dataset:
   name: digit_multiplication
   cot: False
+  max_size: -1
+  max_seq_len: 256
 
 digit: 4
-output_dir: outputs/${digit}_by_${digit}_mult/${model}
-train_path: data/${digit}_by_${digit}_mult/train.txt
-val_path: data/${digit}_by_${digit}_mult/valid.txt
+train_path: ${data_dir}/${digit}_by_${digit}_mult/train.txt
+val_path: ${data_dir}/${digit}_by_${digit}_mult/valid.txt
 
 batch_size: 256
-epochs: 3
-max_length: 256
-
+epochs: 20
 learning_rate: 3e-4
 
-max_size: -1
-truncation: -1
 
-deq:
+model:
+  arch: deq
   d_model: 64
   n_layers: 2
   n_heads: 2

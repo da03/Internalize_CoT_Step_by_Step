@@ -41,28 +41,27 @@ def main(config: DictConfig):
     tokenizer, train_loader, val_loader, val_dataset = dataset.data.load_dataloader(config)
 
     vocab_size = tokenizer.vocab_size
-    max_seq_len = config.max_length
 
     # Initialize the model
-    if config.model == "deq":
+    if config.model.arch == "deq":
         from deq_reasoning.models.implicit.deq import GPT2CustomModel
-    elif config.model == "baseline_1":
+    elif config.model.arch == "baseline_1":
         from deq_reasoning.models.explicit.baseline_1 import GPT2CustomModel
-    elif config.model == "baseline_2":
+    elif config.model.arch == "baseline_2":
         from deq_reasoning.models.implicit.baseline_2 import GPT2CustomModel
-    elif config.model == "baseline_3":
+    elif config.model.arch == "baseline_3":
         from deq_reasoning.models.implicit.baseline_3 import GPT2CustomModel
     else:
         raise NotImplementedError
     
     model = GPT2CustomModel(
         vocab_size=vocab_size,
-        max_seq_len=max_seq_len,
-        n_layers=config.n_layers,
-        n_heads=config.n_heads,
-        d_model=config.d_model,
-        d_ff=config.d_ff,
-        dropout=config.dropout,
+        max_seq_len=config.dataset.max_seq_len,
+        n_layers=config.model.n_layers,
+        n_heads=config.model.n_heads,
+        d_model=config.model.d_model,
+        d_ff=config.model.d_ff,
+        dropout=config.model.dropout,
     )
     model.to(device)
 
@@ -73,14 +72,15 @@ def main(config: DictConfig):
     criterion = nn.CrossEntropyLoss(ignore_index=-100)  # Ignore padding tokens
 
     for epoch in range(config.epochs):
-        models.utils.train(config, model, train_loader, criterion, optimizer, epoch)
-        models.utils.train(config, model, val_loader, criterion, epoch)
-        utils.generate.generate_examples_after_epoch(epoch, val_examples, tokenizer, model)
+        models.train(config, model, train_loader, criterion, optimizer, epoch)
+        models.val(config, model, val_loader, criterion, epoch)
+        logger.info(f'\nExample Generations after Epoch {epoch + 1}:')
+        utils.generate.generate_examples_after_epoch(val_examples, tokenizer, model, config.model.max_chunk, device=config.device)
 
     # Save the final model
     if config.save_model:
-        os.makedirs(config.output_dir, exist_ok=True)
-        torch.save(model.state_dict(), os.path.join(config.output_dir, 'pytorch_model.bin'))
+        os.makedirs(config.outputs_dir, exist_ok=True)
+        torch.save(model.state_dict(), os.path.join(config.outputs_dir, 'pytorch_model.bin'))
 
     total_runtime = time.time() - total_runtime
     wandb.log({"total_runtime": total_runtime})

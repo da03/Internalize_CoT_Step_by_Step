@@ -1,6 +1,6 @@
 train_models/
 trained_model/
-# models/
+models/
 __pycache__/
 outputs/
 wandb/

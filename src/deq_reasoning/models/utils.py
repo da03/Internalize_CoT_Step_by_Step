@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 def train(config, model, train_loader, criterion, optimizer, epoch):
     model.train()
 
-    print(f'\nEpoch {epoch + 1}/{config.epochs}')
+    logger.info(f'\nEpoch {epoch + 1}/{config.epochs}')
     epoch_loss = 0
     total_correct = 0
     total_count = 0
@@ -23,7 +23,7 @@ def train(config, model, train_loader, criterion, optimizer, epoch):
         optimizer.zero_grad()
         # Get logits and loss from the model
         logits, loss = model.compute_loss(input_ids, attention_mask=attention_mask, labels=labels, criterion=criterion,
-                            chunk_size=config.max_chunk,max_chunks=config.chunk_size,predict_start_idx=batch['input_len'])
+                            chunk_size=config.model.max_chunk,max_chunks=config.model.chunk_size,predict_start_idx=batch['input_len'])
 
         loss.backward()
         optimizer.step()
@@ -66,7 +66,7 @@ def val(config, model, val_loader, criterion, epoch):
             labels = batch['labels'].to(config.device)  # (batch_size, seq_len)
             attention_mask = batch['attention_mask'].to(config.device)  # (batch_size, seq_len, seq_len)
 
-            logits = model(input_ids, attention_mask=attention_mask,num_iter=config.max_chunk)  # (batch_size, seq_len, vocab_size)
+            logits = model(input_ids, attention_mask=attention_mask,num_iter=config.model.max_chunk)  # (batch_size, seq_len, vocab_size)
 
             # Reshape for loss computation
             logits = logits.view(-1, logits.size(-1))  # (batch_size * seq_len, vocab_size)

@@ -9,13 +9,13 @@ def load_dataloader(config):
         tokenizer = CustomTokenizer(vocab, char2id, id2char)
 
         vocab_size = tokenizer.vocab_size
-        max_seq_len = config.max_length
-
-        train_dataset = CoTDataset(tokenizer, config.train_path, max_length=config.max_length, max_size=config.max_size, with_cot=config.dataset.cot)
+        max_seq_len = config.dataset.max_seq_len
+        
+        train_dataset = CoTDataset(tokenizer, config.train_path, max_length=max_seq_len, max_size=config.dataset.max_size, with_cot=config.dataset.cot)
         train_data_collator = CoTDataCollator(tokenizer=tokenizer)
         train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True, collate_fn=train_data_collator)
 
-        val_dataset = CoTDataset(tokenizer, config.val_path, max_length=config.max_length)
+        val_dataset = CoTDataset(tokenizer, config.val_path, max_length=max_seq_len)
         val_data_collator = CoTDataCollator(tokenizer=tokenizer)
         val_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False, collate_fn=val_data_collator)
 

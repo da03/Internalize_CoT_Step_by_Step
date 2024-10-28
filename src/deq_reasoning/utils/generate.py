@@ -1,4 +1,6 @@
 import torch
+import logging
+logger = logging.getLogger(__name__)
 
 
 def generate_sequence(model, tokenizer, input_ids, max_target_length=50, max_chunk=12, device='cpu'):
@@ -40,21 +42,20 @@ def generate_sequence(model, tokenizer, input_ids, max_target_length=50, max_chu
     return generated_text
 
 
-def generate_examples_after_epoch(epoch, val_examples, tokenizer, model):
-    print(f'\nExample Generations after Epoch {epoch + 1}:')
+def generate_examples_after_epoch(val_examples, tokenizer, model, max_chunk=12, device='cpu'):
     for idx, example in enumerate(val_examples):
         input_len = example['input_len']
         input_tokens = example['input_ids'][:input_len]  # Only the input portion (without padding)
         input_text = tokenizer.decode(input_tokens, skip_special_tokens=True)
 
         # Generate the prediction
-        generated_text = generate_sequence(model, tokenizer, input_tokens, max_target_length=len(example['target_ids']), max_chunk=args.max_chunk, device=device)
+        generated_text = generate_sequence(model, tokenizer, input_tokens, max_target_length=len(example['target_ids']), max_chunk=max_chunk, device=device)
 
         # Extract the target answer (what the model should generate)
         target_tokens = example['target_ids']  # Get the target tokens directly from the example
         target_text = tokenizer.decode(target_tokens, skip_special_tokens=True)
         
-        print(f'\nExample {idx + 1}')
-        print(f'Input Text: {input_text}')
-        print(f'Prediction: {generated_text}')
-        print(f'Target Answer: {target_text}')
+        logger.info(f'\nExample {idx + 1}')
+        logger.info(f'Input Text: {input_text}')
+        logger.info(f'Prediction: {generated_text}')
+        logger.info(f'Target Answer: {target_text}')
