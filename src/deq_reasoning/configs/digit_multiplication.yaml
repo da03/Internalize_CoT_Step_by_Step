@@ -1,0 +1,43 @@
+defaults:
+  # Common setup.
+  - setup
+  # This file.
+  - _self_
+  # - optional override:
+
+model: deq
+
+device: cuda
+
+dataset:
+  name: digit_multiplication
+  cot: False
+
+digit: 4
+output_dir: outputs/${digit}_by_${digit}_mult/${model}
+train_path: data/${digit}_by_${digit}_mult/train.txt
+val_path: data/${digit}_by_${digit}_mult/valid.txt
+
+batch_size: 256
+epochs: 3
+max_length: 256
+
+learning_rate: 3e-4
+
+max_size: -1
+truncation: -1
+
+deq:
+  d_model: 64
+  n_layers: 2
+  n_heads: 2
+  d_ff: 256 # 64 * 4
+  dropout: 0.1
+  # Number of tokens to predict in one iteration of fixed-point
+  chunk_size: 12
+  # Number of iterations of fixed-point
+  max_chunk: 12
+
+save_model: False
+device_suggested: ${device}
+is_this_overridden: no
