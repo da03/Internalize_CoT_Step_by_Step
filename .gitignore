@@ -1,0 +1,10 @@
+final_checkpoints/
+cached_activations/
+*.log
+*.png
+*.pdf
+*.csv
+*.json
+*.txt
+*.jsonl
+trained_models

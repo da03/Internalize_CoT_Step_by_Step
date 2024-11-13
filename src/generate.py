@@ -36,11 +36,11 @@ def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens,  layer_n
         from activation_utils import ActivationCache, attach_hooks_to_layers
         activation_cache = ActivationCache(cache_dir)
         hooks = attach_hooks_to_layers(model, layer_names, activation_cache)
-
+        print(f'hooks: {hooks}')
     try:
 
         for batch in tqdm.tqdm(dataloader):
-            input_ids_all = batch['input_ids_all']
+            input_ids_all = batch['input_ids_all'].to(device)
             labels = batch['labels_all']
             sep_positions = get_sep_position(input_ids_all, tokenizer.eos_token_id)
             input_ids = input_ids_all[:, :sep_positions.max()+1]
@@ -50,7 +50,6 @@ def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens,  layer_n
             # Set input length for activation caching
             if activation_cache is not None:
                 activation_cache.set_input_length(input_ids.size(1))
-
             # Generate
             start_time = time.time()
             beam_output = model.generate(
@@ -76,12 +75,11 @@ def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens,  layer_n
                 print (f'Target: {tgt_text}')
                 print (f'Predicted: {pred_text}')
                 print ('')
-
-            
-                
             
             if layer_names and activation_cache is not None:
                 activation_cache.save_to_disk(final=True)
+
+            # break
         
     finally:
         if hooks:
@@ -106,14 +104,14 @@ def main():
     parser.set_defaults(bf16=False)
     args = parser.parse_args()
 
-    print (args)
+    print(args)
 
     if args.bf16:
         dtype = 'bfloat16'
     else:
         dtype = 'float32'
     ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda:5' if torch.cuda.is_available() else 'cpu')
     # ctx = torch.amp.autocast(device_type='cuda', dtype=ptdtype)
     ctx = torch.amp.autocast(device_type='cpu', dtype=ptdtype)
     print (ptdtype, dtype, device)
@@ -129,7 +127,6 @@ def main():
     collate_fn = CoTDataCollator(tokenizer)
     test_dataset = CoTDataset(tokenizer, args.test_path, args.truncation)
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, collate_fn=collate_fn, shuffle=False)
-
     
     accuracy, throughput = evaluate(
         test_dataloader, 
