@@ -1,4 +1,5 @@
 # # # analyze_activations.py
+#%% 
 
 import numpy as np
 from sklearn.decomposition import PCA
@@ -7,6 +8,11 @@ import os
 import seaborn as sns
 import argparse
 from typing import Dict, List, Tuple
+import plotly.graph_objects as go
+import sys
+
+#%% 
+
 def extract_labels_from_expressions(expressions_file: str) -> Tuple[List[str], np.ndarray]:
     """Extract sequences and convert them to numbers"""
     full_labels = []
@@ -15,15 +21,19 @@ def extract_labels_from_expressions(expressions_file: str) -> Tuple[List[str], n
     with open(expressions_file, 'r') as f:
         for line in f:
             parts = line.strip().split('#')
-            if len(parts) > 1:
-                sequence = parts[-1].strip()
-                full_labels.append(sequence)
+            parts2 = line.strip().split('||')
+            if len(parts) > 1 and len(parts2) > 1:
+                input = parts2[0].strip()[::-1]
+                output = parts[-1].strip()[::-1]
+                full_labels.append(f"{input} || {output}")
                 # Convert space-separated sequence to single number
-                num = int(''.join(sequence.split()))
+                num = int(''.join(output.split()))
                 numeric_values.append(num)
-    
     return full_labels, np.array(numeric_values)
 
+full_labels, numeric_values = extract_labels_from_expressions("data/4_by_4_mult/test_bigbench.txt")
+print(full_labels)
+#%% 
 def load_activations_with_labels(activation_dir: str, expressions_file: str):
     """Load activations from final folder and their corresponding labels"""
     full_labels, numeric_values = extract_labels_from_expressions(expressions_file)
@@ -69,30 +79,49 @@ def analyze_pca_with_math_labels(
         pca = PCA(n_components=2)
         transformed = pca.fit_transform(acts)
         
-        # Create scatter plot
-        plt.figure(figsize=(12, 8))
+        # Create interactive scatter plot with plotly
+        fig = go.Figure()
         
-        # Plot each point colored by its numeric value
-        scatter = plt.scatter(
-            transformed[:, 0], 
-            transformed[:, 1], 
-            c=numeric_values,
-            cmap='viridis',
-            alpha=0.6,
-            s=50
+        fig.add_trace(go.Scatter(
+            x=transformed[:, 0],
+            y=transformed[:, 1],
+            mode='markers',
+            marker=dict(
+                size=8,
+                color=numeric_values,
+                colorscale='Viridis',
+                colorbar=dict(title='Numeric Value'),
+                opacity=0.6
+            ),
+            text=full_labels,  # Add hover text showing full labels
+            hovertemplate='<b>Value:</b> %{marker.color}<br>' +
+                         '<b>Label:</b> %{text}<br>' +
+                         '<b>PC1:</b> %{x:.2f}<br>' +
+                         '<b>PC2:</b> %{y:.2f}<extra></extra>'
+        ))
+        
+        # Update layout
+        fig.update_layout(
+            title=f'{layer_name} - PCA Projection',
+            xaxis_title=f'PC1 ({pca.explained_variance_ratio_[0]:.2%} variance)',
+            yaxis_title=f'PC2 ({pca.explained_variance_ratio_[1]:.2%} variance)',
+            width=1000,
+            height=800,
+            template='plotly_white',  # Clean white background with grid
+            xaxis=dict(
+                tickfont=dict(size=24),
+                titlefont=dict(size=28)
+            ),
+            yaxis=dict(
+                tickfont=dict(size=24),
+                titlefont=dict(size=28)
+            ),
+            title_font_size=32
         )
         
-        # Add a colorbar
-        cbar = plt.colorbar(scatter)
-        cbar.set_label('Numeric Value')
-        
-        plt.title(f'{layer_name} - PCA Projection')
-        plt.xlabel(f'PC1 ({pca.explained_variance_ratio_[0]:.2%} variance)')
-        plt.ylabel(f'PC2 ({pca.explained_variance_ratio_[1]:.2%} variance)')
-        plt.grid(True)
-        plt.tight_layout()
-        plt.savefig(os.path.join(save_dir, f'{layer_name}_pca.png'), dpi=300, bbox_inches='tight')
-        plt.close()
+        # Show plot interactively
+        fig.show()
+        fig.write_image(os.path.join(save_dir, f'{layer_name}_pca.png'), scale=2)
 
 # def extract_labels_from_expressions(expressions_file: str) -> List[str]:
 #     """Extract full sequence labels from math expressions (all numbers after #)"""
@@ -340,18 +369,30 @@ def analyze_pca_with_math_labels(
 #     main()
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--activation_dir', type=str, required=True,
-                      help='Directory containing activation files')
-    parser.add_argument('--expressions_file', default='data/4_by_4_mult/test_bigbench.txt', type=str, required=True,
-                      help='File containing math expressions with labels')
-    parser.add_argument('--save_dir', type=str, default='pca_results_labels',
-                      help='Directory to save PCA results')
-    parser.add_argument('--visualization', type=str, default='both',
-                      choices=['scatter', 'density', 'both'],
-                      help='Type of visualization to generate')
-    args = parser.parse_args()
+    # Check if we're in a notebook environment
+    in_notebook = 'ipykernel' in sys.modules
     
+    if not in_notebook:
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--activation_dir', type=str, required=True,
+                          help='Directory containing activation files')
+        parser.add_argument('--expressions_file', default='data/4_by_4_mult/test_bigbench.txt', type=str,
+                          help='File containing math expressions with labels')
+        parser.add_argument('--save_dir', type=str, default='pca_results_labels_2',
+                          help='Directory to save PCA results')
+        parser.add_argument('--visualization', type=str, default='both',
+                          choices=['scatter', 'density', 'both'],
+                          help='Type of visualization to generate')
+        args = parser.parse_args()
+    else:
+        # Default values for notebook environment
+        class Args:
+            def __init__(self):
+                self.activation_dir = "cached_activations"
+                self.expressions_file = "data/4_by_4_mult/test_bigbench.txt"
+                self.save_dir = "pca_results_labels_2"
+                self.visualization = "both"
+        args = Args()
     # print(f"Loading activations and labels...")
     # activations, labels = load_activations_with_labels(args.activation_dir, args.expressions_file)
     
@@ -375,3 +416,5 @@ def main():
 if __name__ == "__main__":
     main()
 
+
+# %%
