@@ -1,4 +1,4 @@
-for i in $(seq 0 50); do
+for i in $(seq 101 5 126); do
     echo "Running checkpoint $i"
     python src/generate.py \
         --from_pretrained trained_models/launch2/checkpoint_$i \
@@ -8,6 +8,5 @@ for i in $(seq 0 50); do
             transformer_layer_5 transformer_layer_6 transformer_layer_7 transformer_layer_8 transformer_layer_9 \
             transformer_layer_10 transformer_layer_11 \
         --cache_dir ./cached_activations/model_checkpoint_$i
-
 done
 

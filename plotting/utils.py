@@ -12,35 +12,37 @@ def concat_plots_from_folder(folder_path="pca_results_labels_2"):
         folder_path (str): Path to folder containing images to concatenate
     """
     # Get all image files in folder
-    image_files = sorted(glob.glob(os.path.join(folder_path, "*.png")))
+    image_files = [
+        os.path.join(folder_path, f"transformer_layer_{i}_pca.png") for i in range(12)
+    ]
     
     if not image_files:
         print(f"No image files found in {folder_path}")
         return
         
     # Open all images
-    images = [Image.open(f) for f in image_files]
+    images = [Image.open(f) for f in image_files if not f.endswith("combined_plot.png")]
     
     # Get dimensions
     widths, heights = zip(*(i.size for i in images))
     
     # Calculate layout
     n = len(images)
-    nrows = int(n**0.5)  # Square root for roughly square layout
-    ncols = (n + nrows - 1) // nrows  # Ceiling division
+    nrows = (n + 3) // 4  # Ceiling division to get number of rows needed for 4 per row
+    ncols = 4
     
     # Create figure
-    fig = plt.figure(figsize=(20, 20))
+    fig = plt.figure(figsize=(20, 5*nrows))
     
     # Add each image as a subplot
     for idx, img in enumerate(images):
         ax = fig.add_subplot(nrows, ncols, idx+1)
         ax.imshow(img)
         ax.axis('off')
-        ax.set_title(os.path.basename(image_files[idx]))
+        ax.set_title(os.path.basename(image_files[idx]).replace('.png', ''))
     
-    plt.tight_layout(pad=0.5) # Reduced padding between subplots
-    plt.savefig(os.path.join(folder_path, "combined_plot.png"), bbox_inches='tight')
+    plt.tight_layout(pad=0.5, h_pad=1.0, w_pad=0.5)  # Adjust spacing
+    plt.savefig(os.path.join(folder_path, "combined_plot.png"), bbox_inches='tight', dpi=300)
     plt.close()
 
 if __name__ == "__main__":

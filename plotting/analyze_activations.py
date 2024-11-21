@@ -107,7 +107,16 @@ def analyze_pca_with_math_labels(
             yaxis_title=f'PC2 ({pca.explained_variance_ratio_[1]:.2%} variance)',
             width=1000,
             height=800,
-            template='plotly_white'  # Clean white background with grid
+            template='plotly_white',  # Clean white background with grid
+            xaxis=dict(
+                tickfont=dict(size=24),
+                titlefont=dict(size=28)
+            ),
+            yaxis=dict(
+                tickfont=dict(size=24),
+                titlefont=dict(size=28)
+            ),
+            title_font_size=32
         )
         
         # Show plot interactively

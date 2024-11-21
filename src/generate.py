@@ -111,7 +111,7 @@ def main():
     else:
         dtype = 'float32'
     ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
-    device = torch.device('cuda:5' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda:2' if torch.cuda.is_available() else 'cpu')
     # ctx = torch.amp.autocast(device_type='cuda', dtype=ptdtype)
     ctx = torch.amp.autocast(device_type='cpu', dtype=ptdtype)
     print (ptdtype, dtype, device)
