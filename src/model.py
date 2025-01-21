@@ -66,69 +66,53 @@ class ImplicitModel(nn.Module):
             logits_processor = None
             stopping_criteria = None
 
-        if sep_positions.eq(sep_positions[0]).all():
-            input_ids = input_ids[:, :sep_positions[0]+1]
-            if position_ids is not None:
-                position_ids = position_ids[:, :sep_positions[0]+1]
-            if position_ids is not None:
-                beam_output = self.base_model.generate(
-                    input_ids=input_ids,
-                    position_ids=position_ids,
-                    generation_config=generation_config,
-                    max_new_tokens=max_new_tokens,
-                    num_beams=num_beams,
-                    early_stopping=True,
-                    num_return_sequences=1,
-                    logits_processor=logits_processor,
-                    stopping_criteria=stopping_criteria,
-                )
-            else:
-                beam_output = self.base_model.generate(
-                    input_ids=input_ids,
-                    generation_config=generation_config,
-                    max_new_tokens=max_new_tokens,
-                    num_beams=num_beams,
-                    early_stopping=True,
-                    num_return_sequences=1,
-                    logits_processor=logits_processor,
-                    stopping_criteria=stopping_criteria,
-                )
-            beam_output = beam_output.unsqueeze(1)
-        else:
-            beam_output = []
-            for i in range(batch_size):
-                input_ids_i = input_ids[i:i+1]
-                sep_positions_i = sep_positions[i:i+1]
-                input_ids_i = input_ids_i[:, :sep_positions_i+1]
-                if position_ids is not None:
-                    position_ids_i = position_ids[i:i+1, :sep_positions_i+1]
-                else:
-                    position_ids_i = None
-                if position_ids_i is not None:
-                    beam_output_i = self.base_model.generate(
-                        input_ids=input_ids_i,
-                        position_ids=position_ids_i,
-                        generation_config=generation_config,
-                        max_new_tokens=max_new_tokens,
-                        num_beams=num_beams,
-                        early_stopping=True,
-                        num_return_sequences=1,
-                        logits_processor=logits_processor,
-                        stopping_criteria=stopping_criteria,
-                    )
-                else:
-                    beam_output_i = self.base_model.generate(
-                        input_ids=input_ids_i,
-                        generation_config=generation_config,
-                        max_new_tokens=max_new_tokens,
-                        num_beams=num_beams,
-                        early_stopping=True,
-                        num_return_sequences=1,
-                        logits_processor=logits_processor,
-                        stopping_criteria=stopping_criteria,
-                    )
-                beam_output.append(beam_output_i)
-        return beam_output
+        beam_output = []
+        input_ids_all = []
+        for i in range(batch_size):
+            if stop_on_two_eos:
+                generation_config.eos_token_id = -1
+                logits_processor = LogitsProcessorList([DoubleEOSLogitsProcessor(self.tokenizer.eos_token_id)])
+                stopping_criteria = StoppingCriteriaList([DoubleEOSStoppingCriteria(self.tokenizer.eos_token_id)])
+
+            input_ids_i = input_ids[i]
+            #sep_positions_i = sep_positions[i:i+1]
+            #end_idx = len(input_ids_i)-1
+            #while input_ids_i[end_idx] == self.tokenizer.eos_token_id:
+            #    end_idx -= 1
+            #input_ids_i = input_ids_i[:end_idx+2]
+            #import pdb; pdb.set_trace()
+            #sep_positions_i = [ii for ii, n in enumerate(input_ids_i.view(-1)) if n == self.tokenizer.eos_token_id][-3]
+            sep_positions_i = [ii for ii, n in enumerate(input_ids_i.view(-1)) if n == self.tokenizer.eos_token_id][0]
+            input_ids_i = input_ids_i.view(1, -1)[:, :sep_positions_i+1]
+            input_ids_all.append(input_ids_i)
+        max_seq_len = max([ele.shape[-1] for ele in input_ids_all])
+        input_ids_tensor = torch.zeros(batch_size,max_seq_len).long().to(input_ids.device)
+        attention_mask_tensor = input_ids_tensor.data.clone()
+        input_ids_tensor.fill_(self.tokenizer.eos_token_id)
+        for i in range(batch_size):
+            pad_len = max_seq_len - input_ids_all[i].shape[-1]
+            input_ids_tensor[i, pad_len:] = torch.Tensor(input_ids_all[i]).view(-1).to(input_ids.device)
+            attention_mask_tensor[i, pad_len:] = 1
+        
+        #import pdb; pdb.set_trace()
+        beam_output = self.base_model.generate(
+            input_ids=input_ids_tensor,
+            attention_mask=attention_mask_tensor,
+            generation_config=generation_config,
+            max_new_tokens=max_new_tokens,
+            num_beams=num_beams,
+            early_stopping=True,
+            num_return_sequences=1,
+            logits_processor=logits_processor,
+            stopping_criteria=stopping_criteria,
+            do_sample=True,
+        )
+        beam_output = beam_output.view(batch_size,1,-1)
+        beam_output_list = []
+        for i in range(batch_size):
+            pad_len = max_seq_len - input_ids_all[i].shape[-1]
+            beam_output_list.append(beam_output[i,:,pad_len:])
+        return beam_output_list
 
     @classmethod
     def from_pretrained(self, pretrained_path):
