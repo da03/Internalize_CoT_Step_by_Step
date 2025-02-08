@@ -209,7 +209,7 @@ def main():
 
     if args.reinitialize_weights:
         print ('reinitializing weights')
-        model.model.apply(model.model._init_weights)
+        model.base_model.apply(model.base_model._init_weights)
 
     if args.keep_position:
         assert 'gpt2' in args.model # only implemented for gpt2 generate TODO: the code for this is not checked in yet
