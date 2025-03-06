@@ -50,9 +50,9 @@ def is_correct(ans, pred_ans):
         # evaluate ans and pred_ans
         ans_result = eval(ans)
         pred_ans_result = eval(pred_ans)
-        return ans_result == pred_ans_result
+        return ans_result == pred_ans_result, ans_result, pred_ans_result
     except:
-        return ans == pred_ans
+        return ans == pred_ans, ans, pred_ans
 
 @torch.no_grad()
 def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens, scheduled_to_remove, removal_side, removal_smoothing_lambda, lambda_distribution, keep_position=False, disable_random_removal_offset=False, thought_length=10, with_z=False, num_zs=10):
@@ -144,13 +144,13 @@ def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens, schedule
                 ans = extract_answer(tgt_text)
                 pred_text = tokenizer.decode(beam_output_i, skip_special_tokens=True)
                 pred_ans = extract_answer(pred_text)
-                
-                if is_correct(ans, pred_ans):
+                correct, ans_result, pred_ans_result = is_correct(ans, pred_ans)
+                if correct:
                     total_correct += 1
                     correct_tensor[i, z_idx] = True
                 print (f'Input: {tokenizer.decode(input_ids_all_i[:sep_position], skip_special_tokens=True)}')
-                print (f'Target {i}: {tgt_text}')
-                print (f'Pred   {i}: {pred_text}')
+                print (f'Target {i}: {tgt_text} ({ans_result})')
+                print (f'Pred   {i}: {pred_text} ({pred_ans_result})')
                 print ('')
         total_any_correct += correct_tensor.any(dim=1).sum().item()
         total_avg_correct += correct_tensor.float().mean(dim=1).sum().item()
