@@ -8,11 +8,12 @@ import logging
 import random
 import torch
 import re
+import time
 
 from torch.utils.data import DataLoader
 from transformers import AdamW
 
-from model import ImplicitModel
+from model import ImplicitModel, is_correct
 from configuration_model import ImplicitModelConfig
 from data import CoTDataset, CoTDataCollator, extract_answer
 from utils import get_sep_position, batch_ids, save_model
@@ -35,27 +36,10 @@ def compute_lambda_distribution(removal_smoothing_lambda, truncate_length=100):
         lambda_distribution[-1] = lambda_distribution[-1] + (1-cum_prob)
     return lambda_distribution
 
-def is_correct(ans, pred_ans):
-    ans = ans.replace('#', '').strip().replace(' ', '')
-    pred_ans = pred_ans.replace('#', '').strip().replace(' ', '')
-    try:
-        # Remove leading zeros in numbers before evaluating
-        def remove_leading_zeros(expr):
-            # Replace any number with leading zeros (but not just '0')
-            return re.sub(r'\b0+([1-9][0-9]*)\b', r'\1', expr)
-        
-        ans = remove_leading_zeros(ans)
-        pred_ans = remove_leading_zeros(pred_ans)
-        #import pdb; pdb.set_trace()
-        # evaluate ans and pred_ans
-        ans_result = eval(ans)
-        pred_ans_result = eval(pred_ans)
-        return ans_result == pred_ans_result, ans_result, pred_ans_result
-    except:
-        return ans == pred_ans, ans, pred_ans
+
 
 @torch.no_grad()
-def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens, scheduled_to_remove, removal_side, removal_smoothing_lambda, lambda_distribution, keep_position=False, disable_random_removal_offset=False, thought_length=10, with_z=False, num_zs=10):
+def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens, scheduled_to_remove, removal_side, removal_smoothing_lambda, lambda_distribution, keep_position=False, disable_random_removal_offset=False, thought_length=10, with_z=False, num_zs=10, is_countdown=True):
     model.eval()
     total_instances = 0
     total_tokens = 0
@@ -144,12 +128,12 @@ def evaluate(dataloader, tokenizer, device, ctx, model, max_new_tokens, schedule
                 ans = extract_answer(tgt_text)
                 pred_text = tokenizer.decode(beam_output_i, skip_special_tokens=True)
                 pred_ans = extract_answer(pred_text)
-                correct, ans_result, pred_ans_result = is_correct(ans, pred_ans)
+                correct, ans_result, pred_ans_result, reason = is_correct(ans, pred_ans, is_countdown=is_countdown)
                 if correct:
                     total_correct += 1
                     correct_tensor[i, z_idx] = True
                 print (f'Input: {tokenizer.decode(input_ids_all_i[:sep_position], skip_special_tokens=True)}')
-                print (f'Target {i}: {tgt_text} ({ans_result})')
+                print (f'Target {i}: {tgt_text} ({ans_result}) {reason}')
                 print (f'Pred   {i}: {pred_text} ({pred_ans_result})')
                 print ('')
         total_any_correct += correct_tensor.any(dim=1).sum().item()
@@ -201,6 +185,8 @@ def main():
     parser.add_argument('--num_zs', type=int, default=10)
     parser.add_argument('--entropy_loss_lambda', type=float, default=1.0)
     args = parser.parse_args()
+
+    args.is_countdown = 'countdown' in args.train_path
 
     if args.remove_all_when_remove_beyond == 'inf':
         args.remove_all_when_remove_beyond = float('inf')
@@ -284,6 +270,10 @@ def main():
     steps_per_removed_token = int(round(steps_per_epoch / args.remove_per_epoch))
     remove_step_counter = 0
     best_val_accuracy = float('-inf')
+    
+    # Add timestamp tracking for hourly checkpoints
+    last_save_time = time.time()
+    save_interval = 3600  # Save every hour (3600 seconds)
 
     all_cot_removed_in_prev_batch = False
     for epoch in range(args.epochs):
@@ -384,9 +374,17 @@ def main():
                 else:
                     print (f"Step: {step}. PPL: {ppl}. Token Accuracy: {token_accuracy}")
                 sys.stdout.flush()
+
+            # Add hourly checkpoint saving
+            current_time = time.time()
+            if current_time - last_save_time > save_interval:
+                print(f"Saving hourly checkpoint at epoch {epoch}, step {step}")
+                model.save_pretrained(os.path.join(args.save_model, f'checkpoint_epoch{epoch}_step{step}'))
+                last_save_time = current_time
+
             step += 1
         print (f'Scheduled to remove: {scheduled_to_remove}')
-        accuracy, token_accuracy, ppl, accuracy_avg_correct, accuracy_any_correct = evaluate(val_dataloader, tokenizer, device, ctx, model, args.max_new_tokens, scheduled_to_remove, args.removal_side, args.removal_smoothing_lambda, lambda_distribution, keep_position=args.keep_position, disable_random_removal_offset=True, thought_length=args.thought_length, with_z=args.with_z, num_zs=args.num_zs)
+        accuracy, token_accuracy, ppl, accuracy_avg_correct, accuracy_any_correct = evaluate(val_dataloader, tokenizer, device, ctx, model, args.max_new_tokens, scheduled_to_remove, args.removal_side, args.removal_smoothing_lambda, lambda_distribution, keep_position=args.keep_position, disable_random_removal_offset=True, thought_length=args.thought_length, with_z=args.with_z, num_zs=args.num_zs, is_countdown=args.is_countdown)
         print (f'Disable Offset Val. PPL: {ppl}; Accuracy: {accuracy}; Token Accuracy: {token_accuracy}. Avg Correct Acc: {accuracy_avg_correct}. Any Correct Acc: {accuracy_any_correct}')
         if accuracy > best_val_accuracy and False:
             print ('***best so far or removed more CoT tokens***')

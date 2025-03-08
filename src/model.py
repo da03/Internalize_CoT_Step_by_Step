@@ -10,24 +10,51 @@ from configuration_model import ImplicitModelConfig
 from utils import get_sep_position, DoubleEOSStoppingCriteria, DoubleEOSLogitsProcessor
 import math
 import re
-def is_correct(ans, pred_ans):
+def is_correct(ans, pred_ans, is_countdown=True):
+    # Clean up strings
     ans = ans.replace('#', '').strip().replace(' ', '')
     pred_ans = pred_ans.replace('#', '').strip().replace(' ', '')
+    is_correct = True
+    reason = []
     try:
+        # Extract numbers by splitting on operators
+        def extract_numbers(expr):
+            # Split by operators and filter out empty strings
+            numbers = re.split(r'[+\-*/]', expr)
+            numbers = [int(n) for n in numbers if n]
+            return sorted(numbers)
+        
         # Remove leading zeros in numbers before evaluating
         def remove_leading_zeros(expr):
             # Replace any number with leading zeros (but not just '0')
             return re.sub(r'\b0+([1-9][0-9]*)\b', r'\1', expr)
         
+        if is_countdown:
+            # Check if both expressions use exactly the same set of numbers
+            ans_numbers = extract_numbers(ans)
+            pred_numbers = extract_numbers(pred_ans)
+            if ans_numbers != pred_numbers:
+                is_correct = False
+                reason.append('Different numbers')
+        # Remove leading zeros before evaluation
         ans = remove_leading_zeros(ans)
         pred_ans = remove_leading_zeros(pred_ans)
-        # evaluate ans and pred_ans
+        
+        # Check if expressions evaluate to the same result
         ans_result = eval(ans)
-        pred_ans_result = eval(pred_ans)
-        #print (f'ans_result: {ans_result}, pred_ans_result: {pred_ans_result}')
-        return ans_result == pred_ans_result
+        pred_result = eval(pred_ans)
+        if ans_result != pred_result:
+            is_correct = False
+            reason.append('Different result')
     except:
-        return ans == pred_ans
+        reason.append('Parsing failed')
+        # Fall back to string comparison if parsing fails
+        is_correct = ans == pred_ans
+        ans_result = ans
+        pred_result = pred_ans
+        if not is_correct:
+            reason.append('Different result')
+    return is_correct, ans_result, pred_result, reason
 
 class ImplicitModel(nn.Module):
     def __init__(self, config, reinitialize_weights=False):
@@ -182,7 +209,7 @@ class ImplicitModel(nn.Module):
             outputs.avg_correct_accuracy = correct_avg / batch_size
         return outputs
 
-    def compute_loss_grpo(self, input_ids, labels, position_ids=None, output_attentions=False, thought_length=10, with_z=False, num_zs=10, epsilon=0.2, beta=0.0, mu=1, max_new_tokens=512, sample_during_training=False):
+    def compute_loss_grpo(self, input_ids, labels, position_ids=None, output_attentions=False, thought_length=10, with_z=False, num_zs=10, epsilon=0.2, beta=0.0, mu=1, max_new_tokens=512, sample_during_training=False, is_countdown=True):
         self.thought_length = thought_length
         assert with_z, 'GRPO requires with_z'
         if beta != 0.0 or mu != 1:
@@ -259,6 +286,7 @@ class ImplicitModel(nn.Module):
         #import pdb; pdb.set_trace()
         #total_logprobs = -0.5 * zs.norm(dim=-1) ** 2
         entropy_loss = 0
+        flag = False
         for t in range(max_new_tokens):
             #print (f't={t}')
             outputs = self.base_model.forward(
@@ -268,10 +296,21 @@ class ImplicitModel(nn.Module):
             )
             next_token_logits = outputs.logits[:, -1, :]
             if t > 0 and cur_token_id.eq(self.tokenizer.eos_token_id).any():
-                print ('Stopping at eos, setting logits to -1e4')
-                next_token_logits[cur_token_id.eq(self.tokenizer.eos_token_id).view(-1)] = - 1e4 # -float('inf')
-                next_token_logits[cur_token_id.eq(self.tokenizer.eos_token_id).view(-1)][..., self.tokenizer.eos_token_id] = 0
-            #entropy_loss += next_token_logits.log_softmax(-1).entropy().mean()
+                flag = True
+                print (f'{t} Stopping at eos, setting logits to -1e4')
+
+                # Create a mask for sequences that have generated EOS
+                eos_mask = cur_token_id.eq(self.tokenizer.eos_token_id).view(-1)
+                
+                # Detach logits for these sequences to stop gradient flow
+                detached_logits = next_token_logits[eos_mask].detach()
+                
+                # Set values and ensure EOS has highest probability 
+                detached_logits.fill_(-1e3)
+                detached_logits[:, self.tokenizer.eos_token_id] = 0
+                
+                # Update only the relevant sequences
+                next_token_logits[eos_mask] = detached_logits
 
             next_token_logprobs = next_token_logits.log_softmax(-1) # batch_size * num_zs, vocab_size
             next_token_probs = next_token_logprobs.exp()
@@ -315,11 +354,26 @@ class ImplicitModel(nn.Module):
             for j in range(num_zs):
                 sequence = generated_tokens[i, j]
                 sequence_str = self.tokenizer.decode(sequence, skip_special_tokens=True)
-                correct = is_correct(ground_truth_str, sequence_str)
+                correct, ans_result, pred_result, reason = is_correct(ground_truth_str, sequence_str, is_countdown=is_countdown)
                 rewards[i, j] = correct
+                
+                if not correct:
+                    if 'Parsing failed' in reason:
+                        rewards[i, j] = -2
+                    elif 'Different numbers' in reason:
+                        rewards[i, j] = -1
+                    else:
+                        rewards[i, j] = 0
+                    #assert len(reason) >= 1
+                    #rewards[i, j] = -(len(reason) - 1)
+                if flag:
+                    print (f'sequence {i} generation {j}:   ground_truth_str: {ground_truth_str}')
+                    print (f'sequence {i} generation {j}:   sequence_str: {sequence_str}')
+                    print (f'sequence {i} generation {j}:   correct: {correct}, ans_result: {ans_result}, pred_result: {pred_result}, reason: {reason}, reward: {rewards[i, j]}')
+        #import pdb; pdb.set_trace()
         # compute correct_any and correct_avg
-        correct_any = rewards.any(dim=1).sum()
-        correct_avg = rewards.mean(dim=1).sum()
+        correct_any = rewards.gt(0).any(dim=1).sum()
+        correct_avg = rewards.gt(0).float().mean(dim=1).sum()
         #print (f'correct_any: {correct_any}, correct_avg: {correct_avg}')
         outputs.total_correct_any = correct_any
         outputs.total_correct_avg = correct_avg 

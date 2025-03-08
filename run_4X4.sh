@@ -1,5 +1,5 @@
 
-export FOLDER=data/5_by_5_mult/
+export FOLDER=data/4_by_4_mult/
 export MODEL=gpt2
 export EPOCHS=200
 export LR=5e-5
@@ -12,7 +12,7 @@ export REMOVAL_SIDE=left
 export PRETRAIN_EPOCHS=0
 export SEED=3456
 export THOUGHT=5
-export SAVE=train_models/5_by_5_mult/think${THOUGHT}/gpt2
+export SAVE=train_models/fixeval_4_by_4_mult/think${THOUGHT}/gpt2
 mkdir -p $SAVE
 TOKENIZERS_PARALLELISM=false CUDA_VISIBLE_DEVICES=1 stdbuf -oL -eL python src/train.py \
     --model ${MODEL} \
@@ -37,7 +37,7 @@ TOKENIZERS_PARALLELISM=false CUDA_VISIBLE_DEVICES=1 stdbuf -oL -eL python src/tr
 
 
 
-export FOLDER=data/5_by_5_mult/
+export FOLDER=data/4_by_4_mult/
 export MODEL=gpt2
 export EPOCHS=200
 export LR=5e-5
@@ -50,9 +50,9 @@ export REMOVAL_SIDE=left
 export PRETRAIN_EPOCHS=0
 export SEED=3456
 export THOUGHT=1
-export SAVE=train_models/5_by_5_mult/think${THOUGHT}/gpt2
+export SAVE=train_models/fixeval_4_by_4_mult/think${THOUGHT}/gpt2
 mkdir -p $SAVE
-TOKENIZERS_PARALLELISM=false CUDA_VISIBLE_DEVICES=0 stdbuf -oL -eL python src/train.py \
+TOKENIZERS_PARALLELISM=false CUDA_VISIBLE_DEVICES=2 stdbuf -oL -eL python src/train.py \
     --model ${MODEL} \
     --thought_length ${THOUGHT} \
     --remove_start_from 999999999 \

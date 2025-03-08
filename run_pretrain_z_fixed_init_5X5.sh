@@ -3,8 +3,8 @@ export FOLDER=data/5_by_5_mult/
 export MODEL=gpt2
 export EPOCHS=200
 export LR=5e-5
-export BSZ=32
-export ACCUMULATE=1
+export BSZ=16
+export ACCUMULATE=2
 export REMOVE_PER_EPOCH=8
 export REMOVE_ALL_WHEN_REMOVE_BEYOND=inf
 export REMOVAL_SMOOTHING_LAMBDA=4
@@ -12,10 +12,17 @@ export REMOVAL_SIDE=left
 export PRETRAIN_EPOCHS=0
 export SEED=3456
 export THOUGHT=5
-export SAVE=train_models/5_by_5_mult/think${THOUGHT}/gpt2
+export NUM_ZS=180
+export ENTROPY_LOSS_LAMBDA=1.0
+export FROM_PRETRAINED=train_models/5_by_5_mult/think${THOUGHT}/gpt2/checkpoint_10
+export SAVE=train_models/5_by_5_mult/init_zs_think${THOUGHT}_zs${NUM_ZS}_lamb${ENTROPY_LOSS_LAMBDA}_withlog_fixed/gpt2
 mkdir -p $SAVE
 TOKENIZERS_PARALLELISM=false CUDA_VISIBLE_DEVICES=1 stdbuf -oL -eL python src/train.py \
+    --from_pretrained ${FROM_PRETRAINED} \
     --model ${MODEL} \
+    --with_z \
+    --num_zs ${NUM_ZS} \
+    --entropy_loss_lambda ${ENTROPY_LOSS_LAMBDA} \
     --thought_length ${THOUGHT} \
     --remove_start_from 999999999 \
     --train_path ${FOLDER}/train.txt \
@@ -34,6 +41,7 @@ TOKENIZERS_PARALLELISM=false CUDA_VISIBLE_DEVICES=1 stdbuf -oL -eL python src/tr
     --save_model ${SAVE} \
     --max_new_tokens 14 \
     > ${SAVE}/log.train 2>&1&
+
 
 
 
@@ -41,8 +49,8 @@ export FOLDER=data/5_by_5_mult/
 export MODEL=gpt2
 export EPOCHS=200
 export LR=5e-5
-export BSZ=32
-export ACCUMULATE=1
+export BSZ=16
+export ACCUMULATE=2
 export REMOVE_PER_EPOCH=8
 export REMOVE_ALL_WHEN_REMOVE_BEYOND=inf
 export REMOVAL_SMOOTHING_LAMBDA=4
@@ -50,10 +58,17 @@ export REMOVAL_SIDE=left
 export PRETRAIN_EPOCHS=0
 export SEED=3456
 export THOUGHT=1
-export SAVE=train_models/5_by_5_mult/think${THOUGHT}/gpt2
+export NUM_ZS=180
+export ENTROPY_LOSS_LAMBDA=1.0
+export FROM_PRETRAINED=train_models/5_by_5_mult/think${THOUGHT}/gpt2/checkpoint_12
+export SAVE=train_models/5_by_5_mult/init_zs_think${THOUGHT}_zs${NUM_ZS}_lamb${ENTROPY_LOSS_LAMBDA}_withlog_fixed/gpt2
 mkdir -p $SAVE
 TOKENIZERS_PARALLELISM=false CUDA_VISIBLE_DEVICES=0 stdbuf -oL -eL python src/train.py \
+    --from_pretrained ${FROM_PRETRAINED} \
     --model ${MODEL} \
+    --with_z \
+    --num_zs ${NUM_ZS} \
+    --entropy_loss_lambda ${ENTROPY_LOSS_LAMBDA} \
     --thought_length ${THOUGHT} \
     --remove_start_from 999999999 \
     --train_path ${FOLDER}/train.txt \
@@ -72,3 +87,8 @@ TOKENIZERS_PARALLELISM=false CUDA_VISIBLE_DEVICES=0 stdbuf -oL -eL python src/tr
     --save_model ${SAVE} \
     --max_new_tokens 14 \
     > ${SAVE}/log.train 2>&1&
+
+
+
+
+
