@@ -166,3 +166,43 @@ TOKENIZERS_PARALLELISM=false CUDA_VISIBLE_DEVICES=0 stdbuf -oL -eL python src/tr
     --save_model ${SAVE} \
     > ${SAVE}/log.train 2>&1
 ```
+
+## Citation
+
+If you use this implementation or Stepwise Internalization, please cite:
+
+**[From Explicit CoT to Implicit CoT: Learning to Internalize CoT Step by Step](https://arxiv.org/abs/2405.14838)**
+
+First posted May 23, 2024.
+
+```bibtex
+@misc{deng2024explicit,
+      title={{From Explicit CoT to Implicit CoT: Learning to Internalize CoT Step by Step}},
+      author={Yuntian Deng and Yejin Choi and Stuart Shieber},
+      year={2024},
+      eprint={2405.14838},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2405.14838}
+}
+```
+
+### Earlier work: Implicit CoT and knowledge distillation
+
+Deng et al. introduced implicit chain-of-thought reasoning in 2023 and developed a knowledge-distillation method. Cite the paper below when discussing that foundation or using its method.
+
+**[Implicit Chain of Thought Reasoning via Knowledge Distillation](https://arxiv.org/abs/2311.01460)**
+
+First posted November 2, 2023.
+
+```bibtex
+@misc{deng2023implicit,
+      title={{Implicit Chain of Thought Reasoning via Knowledge Distillation}},
+      author={Yuntian Deng and Kiran Prasad and Roland Fernandez and Paul Smolensky and Vishrav Chaudhary and Stuart Shieber},
+      year={2023},
+      eprint={2311.01460},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2311.01460}
+}
+```

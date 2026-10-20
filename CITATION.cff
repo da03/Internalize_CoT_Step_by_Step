@@ -1,0 +1,45 @@
+cff-version: 1.2.0
+message: If you use this implementation or Stepwise Internalization, please cite the paper below.
+type: software
+title: Internalize CoT Step by Step
+authors:
+- name: Internalize CoT Step by Step contributors
+repository-code: https://github.com/da03/Internalize_CoT_Step_by_Step
+url: https://arxiv.org/abs/2405.14838
+license: MIT
+preferred-citation:
+  type: article
+  title: 'From Explicit CoT to Implicit CoT: Learning to Internalize CoT Step by Step'
+  authors:
+  - family-names: Deng
+    given-names: Yuntian
+  - family-names: Choi
+    given-names: Yejin
+  - family-names: Shieber
+    given-names: Stuart
+  year: 2024
+  date-released: '2024-05-23'
+  journal: arXiv
+  doi: 10.48550/arXiv.2405.14838
+  url: https://arxiv.org/abs/2405.14838
+references:
+- type: article
+  title: Implicit Chain of Thought Reasoning via Knowledge Distillation
+  authors:
+  - family-names: Deng
+    given-names: Yuntian
+  - family-names: Prasad
+    given-names: Kiran
+  - family-names: Fernandez
+    given-names: Roland
+  - family-names: Smolensky
+    given-names: Paul
+  - family-names: Chaudhary
+    given-names: Vishrav
+  - family-names: Shieber
+    given-names: Stuart
+  year: 2023
+  date-released: '2023-11-02'
+  journal: arXiv
+  doi: 10.48550/arXiv.2311.01460
+  url: https://arxiv.org/abs/2311.01460
